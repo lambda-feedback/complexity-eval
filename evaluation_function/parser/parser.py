@@ -233,9 +233,9 @@ class PseudocodeParser:
             
             indent_level = self.preprocessor.get_indent_level(line, indent_unit)
             
-            # Detect function definitions
+            # Detect function definitions (with optional { at end)
             func_match = re.match(
-                r'^(function|algorithm|procedure|def)\s+(\w+)\s*\([^)]*\)',
+                r'^(function|algorithm|procedure|def)\s+(\w+)\s*\([^)]*\)\s*\{?',
                 stripped, re.IGNORECASE
             )
             if func_match:
@@ -270,34 +270,69 @@ class PseudocodeParser:
         global_block = BlockNode(statements=statements) if statements else None
         return ProgramNode(functions=functions, global_statements=global_block)
     
-    def _collect_block(self, lines: List[str], start_idx: int, 
+    def _collect_block(self, lines: List[str], start_idx: int,
                        base_indent: int, indent_unit: int) -> Tuple[List[str], int]:
-        """Collect lines belonging to a block."""
+        """Collect lines belonging to a block.
+
+        Supports three block styles:
+        1. Indentation-based (Python-like)
+        2. END keyword-based (END IF, END FOR, etc.)
+        3. Curly brace-based ({ ... })
+        """
         block_lines = []
         i = start_idx
-        
+        brace_count = 0
+
+        # Check if the block starts with an opening brace
+        if i < len(lines):
+            first_line = lines[i].strip()
+            if first_line == '{' or first_line.endswith('{'):
+                brace_count = 1
+                # If just '{', skip it; if 'DO {', include content after
+                if first_line == '{':
+                    i += 1
+                else:
+                    # Remove the trailing brace from this line
+                    block_lines.append(first_line[:-1].strip())
+                    i += 1
+
         while i < len(lines):
             line = lines[i]
             stripped = line.strip()
-            
+
             if not stripped:
                 block_lines.append(line)
                 i += 1
                 continue
-            
+
+            # Handle curly brace blocks
+            if brace_count > 0:
+                brace_count += stripped.count('{') - stripped.count('}')
+                if brace_count <= 0:
+                    # Remove trailing } if present
+                    if stripped == '}':
+                        i += 1
+                    else:
+                        block_lines.append(stripped.rstrip('}').strip())
+                        i += 1
+                    break
+                block_lines.append(line)
+                i += 1
+                continue
+
             current_indent = self.preprocessor.get_indent_level(line, indent_unit)
-            
-            # End markers
-            if re.match(r'^(end\b|endif\b|endfor\b|endwhile\b|done\b)', stripped, re.IGNORECASE):
+
+            # End markers (keyword-based)
+            if re.match(r'^(end\b|endif\b|endfor\b|endwhile\b|done\b|\})', stripped, re.IGNORECASE):
                 i += 1
                 break
-            
+
             if current_indent <= base_indent and i > start_idx:
                 break
-            
+
             block_lines.append(line)
             i += 1
-        
+
         return block_lines, i
     
     def _parse_block_fallback(self, lines: List[str], indent_unit: int) -> BlockNode:
@@ -335,9 +370,9 @@ class PseudocodeParser:
                      indent_level: int, indent_unit: int) -> Optional[Tuple[LoopNode, int]]:
         """Detect and parse a loop."""
         
-        # FOR loop: for i = 1 to n
+        # FOR loop: for i = 1 to n (with optional DO or { at end)
         for_match = re.match(
-            r'for\s+(\w+)\s*[=:]\s*(\w+)\s+to\s+(\w+)',
+            r'for\s+(\w+)\s*[=:]\s*(\w+)\s+to\s+(\w+)(?:\s+(?:do|step\s+\w+))?\s*\{?',
             line, re.IGNORECASE
         )
         if for_match:
@@ -359,8 +394,8 @@ class PseudocodeParser:
                 nesting_level=indent_level
             ), next_idx
         
-        # WHILE loop
-        while_match = re.match(r'while\s+(.+?)(\s+do)?$', line, re.IGNORECASE)
+        # WHILE loop (with optional DO or { at end)
+        while_match = re.match(r'while\s+(.+?)(?:\s+do)?\s*\{?$', line, re.IGNORECASE)
         if while_match:
             body_lines, next_idx = self._collect_block(lines, idx + 1, indent_level, indent_unit)
             body = self._parse_block_fallback(body_lines, indent_unit)
@@ -372,9 +407,9 @@ class PseudocodeParser:
                 nesting_level=indent_level
             ), next_idx
         
-        # FOR EACH loop
+        # FOR EACH loop (with optional { at end)
         foreach_match = re.match(
-            r'for\s+(?:each\s+)?(\w+)\s+in\s+(\w+)',
+            r'for\s+(?:each\s+)?(\w+)\s+in\s+(\w+)(?:\s+do)?\s*\{?',
             line, re.IGNORECASE
         )
         if foreach_match:
@@ -411,7 +446,7 @@ class PseudocodeParser:
     def _detect_conditional(self, line: str, lines: List[str], idx: int,
                            indent_level: int, indent_unit: int) -> Optional[Tuple[ConditionalNode, int]]:
         """Detect and parse a conditional."""
-        if_match = re.match(r'if\s+(.+?)(\s+then)?$', line, re.IGNORECASE)
+        if_match = re.match(r'if\s+(.+?)(?:\s+then)?\s*\{?$', line, re.IGNORECASE)
         if if_match:
             body_lines, next_idx = self._collect_block(lines, idx + 1, indent_level, indent_unit)
             then_branch = self._parse_block_fallback(body_lines, indent_unit)
@@ -500,15 +535,18 @@ class PseudocodeParser:
             if not stripped:
                 continue
             
-            # Check if this line starts a loop
+            # Check if this line starts a loop (also check for opening brace)
             if any(stripped.startswith(kw) for kw in ['for ', 'for(', 'while ', 'while(', 'repeat']):
                 current_nesting += 1
                 max_nesting = max(max_nesting, current_nesting)
+                # If the line ends with {, the brace is part of this loop start
+                # (already counted above)
             
-            # Check if this line ends a loop block
+            # Check if this line ends a loop block (END keywords or closing brace)
             if (stripped.startswith('end for') or stripped.startswith('endfor') or
                 stripped.startswith('end while') or stripped.startswith('endwhile') or
-                stripped == 'done' or stripped.startswith('until ')):
+                stripped == 'done' or stripped.startswith('until ') or
+                stripped == '}'):
                 current_nesting = max(0, current_nesting - 1)
         
         has_recursion = False

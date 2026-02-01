@@ -16,20 +16,25 @@ FUNC_KW: "function"i | "algorithm"i | "procedure"i | "def"i
 
 params: NAME ("," NAME)*
 
-// Block (indentation or end-delimited)
+// Block (indentation, end-delimited, or curly braces)
 block: _NL _INDENT statement+ _DEDENT
      | _NL (statement _NL?)* END_KW _NL?
+     | "{" _NL? (statement _NL?)* "}"
 
 END_KW: "end"i NAME? | "endif"i | "endfor"i | "endwhile"i | "done"i
 
 // Statements
 statement: for_stmt
-         | while_stmt  
+         | while_stmt
          | if_stmt
          | repeat_stmt
          | return_stmt
+         | call_stmt
          | assignment
          | expr
+
+// Call statement (standalone function call with CALL keyword)
+call_stmt: "call"i NAME "(" [args] ")"
 
 // For loop
 for_stmt: "for"i NAME "=" expr "to"i expr ("step"i expr)? block
@@ -77,9 +82,10 @@ COMP_OP: "==" | "!=" | "<=" | ">=" | "<" | ">" | "="
 ?power: atom
 
 ?atom: NUMBER
-     | STRING  
+     | STRING
      | "true"i -> true
      | "false"i -> false
+     | "call"i NAME "(" [args] ")" -> func_call
      | NAME "(" [args] ")" -> func_call
      | NAME "[" expr "]" -> array_access
      | NAME -> var

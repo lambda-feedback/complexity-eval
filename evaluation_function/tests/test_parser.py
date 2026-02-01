@@ -600,7 +600,127 @@ END FOR"""
         # Generate code with many statements
         statements = [f"x{i} = {i}" for i in range(100)]
         code = "\n".join(statements)
-        
+
         result = parser.parse(code)
-        
+
         assert result is not None
+
+
+class TestCurlyBraceBlocks:
+    """Tests for curly brace block syntax."""
+
+    def test_for_loop_with_curly_braces(self, parser):
+        """Test parsing FOR loop with curly braces."""
+        code = """FOR i = 1 TO n {
+    x = x + 1
+}"""
+        result = parser.parse(code)
+
+        structure = parser.detect_structure(code)
+        assert structure['has_loops']
+        assert structure['loop_count'] >= 1
+
+    def test_while_loop_with_curly_braces(self, parser):
+        """Test parsing WHILE loop with curly braces."""
+        code = """WHILE x > 0 {
+    x = x - 1
+}"""
+        result = parser.parse(code)
+
+        structure = parser.detect_structure(code)
+        assert structure['has_loops']
+
+    def test_if_statement_with_curly_braces(self, parser):
+        """Test parsing IF statement with curly braces."""
+        code = """IF x > 0 {
+    y = 1
+}"""
+        result = parser.parse(code)
+
+        structure = parser.detect_structure(code)
+        assert structure['has_conditionals']
+
+    def test_function_with_curly_braces(self, parser):
+        """Test parsing function with curly braces."""
+        code = """FUNCTION test(n) {
+    FOR i = 1 TO n {
+        x = x + 1
+    }
+}"""
+        result = parser.parse(code)
+
+        structure = parser.detect_structure(code)
+        assert structure['has_loops']
+
+    def test_nested_loops_with_curly_braces(self, parser):
+        """Test parsing nested loops with curly braces."""
+        code = """FOR i = 1 TO n {
+    FOR j = 1 TO n {
+        x = x + 1
+    }
+}"""
+        result = parser.parse(code)
+
+        structure = parser.detect_structure(code)
+        assert structure['has_loops']
+        assert structure['has_nested_loops']
+        assert structure['loop_count'] >= 2
+
+    def test_mixed_end_and_braces(self, parser):
+        """Test mixing END keywords and curly braces."""
+        code = """FOR i = 1 TO n {
+    IF x > 0 THEN
+        y = 1
+    END IF
+}"""
+        result = parser.parse(code)
+
+        structure = parser.detect_structure(code)
+        assert structure['has_loops']
+        assert structure['has_conditionals']
+
+
+class TestCallKeyword:
+    """Tests for CALL keyword function invocation."""
+
+    def test_call_keyword_statement(self, parser):
+        """Test CALL keyword for function invocation."""
+        code = """FOR i = 1 TO n DO
+    CALL print(i)
+END FOR"""
+        result = parser.parse(code)
+
+        structure = parser.detect_structure(code)
+        assert structure['has_loops']
+
+    def test_call_keyword_in_function(self, parser):
+        """Test CALL keyword within a function."""
+        code = """FUNCTION test(A, n)
+    FOR i = 1 TO n DO
+        CALL process(A[i])
+    END FOR
+END FUNCTION"""
+        result = parser.parse(code)
+
+        structure = parser.detect_structure(code)
+        assert structure['has_loops']
+
+    def test_direct_function_call(self, parser):
+        """Test direct function call without CALL keyword."""
+        code = """FOR i = 1 TO n DO
+    print(i)
+END FOR"""
+        result = parser.parse(code)
+
+        structure = parser.detect_structure(code)
+        assert structure['has_loops']
+
+    def test_call_with_curly_braces(self, parser):
+        """Test CALL keyword with curly brace blocks."""
+        code = """FOR i = 1 TO n {
+    CALL process(i)
+}"""
+        result = parser.parse(code)
+
+        structure = parser.detect_structure(code)
+        assert structure['has_loops']
