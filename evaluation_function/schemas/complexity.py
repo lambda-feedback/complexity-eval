@@ -164,11 +164,21 @@ class ComplexityClass(str, Enum):
             (cls.LINEAR, cls.LINEAR): cls.QUADRATIC,
             (cls.LINEAR, cls.QUADRATIC): cls.CUBIC,
             (cls.QUADRATIC, cls.LINEAR): cls.CUBIC,
+            (cls.LINEAR, cls.CUBIC): cls.POLYNOMIAL,      # O(n⁴)
+            (cls.CUBIC, cls.LINEAR): cls.POLYNOMIAL,      # O(n⁴)
             (cls.LINEAR, cls.LOGARITHMIC): cls.LINEARITHMIC,
             (cls.LOGARITHMIC, cls.LINEAR): cls.LINEARITHMIC,
             (cls.LINEAR, cls.LINEARITHMIC): cls.POLYNOMIAL,  # O(n² log n) ≈ polynomial
             (cls.LINEARITHMIC, cls.LINEAR): cls.POLYNOMIAL,
             (cls.QUADRATIC, cls.QUADRATIC): cls.POLYNOMIAL,  # O(n⁴)
+            (cls.QUADRATIC, cls.CUBIC): cls.POLYNOMIAL,      # O(n⁵)
+            (cls.CUBIC, cls.QUADRATIC): cls.POLYNOMIAL,      # O(n⁵)
+            (cls.CUBIC, cls.CUBIC): cls.POLYNOMIAL,          # O(n⁶)
+            (cls.LINEAR, cls.POLYNOMIAL): cls.POLYNOMIAL,    # Still polynomial
+            (cls.POLYNOMIAL, cls.LINEAR): cls.POLYNOMIAL,    # Still polynomial
+            (cls.QUADRATIC, cls.POLYNOMIAL): cls.POLYNOMIAL,
+            (cls.POLYNOMIAL, cls.QUADRATIC): cls.POLYNOMIAL,
+            (cls.POLYNOMIAL, cls.POLYNOMIAL): cls.POLYNOMIAL,
         }
         
         result = rules.get((a, b))
