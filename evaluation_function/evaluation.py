@@ -15,6 +15,7 @@ from lf_toolkit.evaluation import Result, Params
 
 from .parser.parser import PseudocodeParser
 from .analyzer.complexity_analyzer import ComplexityAnalyzer, AnalysisResult
+from .analyzer.feedback_generator import FeedbackGenerator, FeedbackLevel
 from .schemas.complexity import ComplexityClass
 
 
@@ -257,10 +258,21 @@ def _generate_feedback(
     is_correct: bool,
     eval_options: Dict
 ) -> str:
-    """Generate comprehensive feedback for the student."""
+    """Generate comprehensive feedback for the student using FeedbackGenerator."""
+    # Use FeedbackGenerator for the core analysis feedback
+    feedback_generator = FeedbackGenerator()
+
+    # Determine feedback level based on options
+    show_detailed = eval_options.get('show_detailed_feedback', True)
+    level = FeedbackLevel.DETAILED if show_detailed and not is_correct else FeedbackLevel.STANDARD
+
+    # Generate detailed feedback from analysis
+    detailed_feedback = feedback_generator.generate(analysis, level)
+
+    # Build the final feedback string
     lines = []
 
-    # Overall result
+    # Overall result header
     if is_correct:
         lines.append("✓ Correct! Your algorithm meets the complexity requirements.")
     else:
@@ -275,11 +287,11 @@ def _generate_feedback(
 
     if time_correct:
         if time_result['comparison'] < 0:
-            lines.append(f"  ✓ Excellent! Your algorithm is more efficient than required.")
+            lines.append("  ✓ Excellent! Your algorithm is more efficient than required.")
         else:
-            lines.append(f"  ✓ Your algorithm meets the time complexity requirement.")
+            lines.append("  ✓ Your algorithm meets the time complexity requirement.")
     else:
-        lines.append(f"  ✗ Your algorithm exceeds the allowed time complexity.")
+        lines.append("  ✗ Your algorithm exceeds the allowed time complexity.")
         lines.append(f"    Try to optimize your algorithm to achieve {time_result['expected'].value}.")
 
     # Student's stated complexity feedback
@@ -299,38 +311,26 @@ def _generate_feedback(
         lines.append(f"  • Detected: {space_result['detected'].value}")
 
         if space_correct:
-            lines.append(f"  ✓ Your algorithm meets the space complexity requirement.")
+            lines.append("  ✓ Your algorithm meets the space complexity requirement.")
         else:
-            lines.append(f"  ✗ Your algorithm exceeds the allowed space complexity.")
+            lines.append("  ✗ Your algorithm exceeds the allowed space complexity.")
         lines.append("")
 
-    # Detailed analysis (if enabled)
-    if eval_options.get('show_detailed_feedback', True) and not is_correct:
+    # Add detailed analysis from FeedbackGenerator (if enabled and incorrect)
+    if show_detailed and not is_correct:
         lines.append("-" * 50)
-        lines.append("Analysis Details:")
 
-        if analysis.loops:
-            lines.append(f"  • Found {len(analysis.loops)} loop(s)")
-            if analysis.max_nesting_depth > 1:
-                lines.append(f"  • Maximum nesting depth: {analysis.max_nesting_depth}")
+        # Add sections from FeedbackGenerator
+        for section in detailed_feedback.sections:
+            lines.append(f"[{section.importance.upper()}] {section.title}")
+            lines.append(section.content)
+            lines.append("")
 
-        if analysis.recursion:
-            rec = analysis.recursion
-            lines.append(f"  • Recursive function: {rec.function_name}()")
-            lines.append(f"  • Recurrence: {rec.recurrence}")
-
-        # Suggestions
-        lines.append("")
-        lines.append("Suggestions:")
-        if time_result['detected'] == ComplexityClass.QUADRATIC and time_result['expected'] == ComplexityClass.LINEAR:
-            lines.append("  • Consider if you can eliminate one of the nested loops")
-            lines.append("  • Using a hash table/dictionary might help reduce complexity")
-        elif time_result['detected'] == ComplexityClass.EXPONENTIAL:
-            lines.append("  • Consider using dynamic programming or memoization")
-            lines.append("  • Avoid redundant recursive calls by caching results")
-        elif time_result['detected'] == ComplexityClass.CUBIC:
-            lines.append("  • Triple nested loops are often avoidable")
-            lines.append("  • Consider algorithmic improvements like divide-and-conquer")
+        # Add suggestions from FeedbackGenerator
+        if detailed_feedback.suggestions:
+            lines.append("Suggestions:")
+            for suggestion in detailed_feedback.suggestions:
+                lines.append(f"  • {suggestion}")
 
     return "\n".join(lines)
 
@@ -353,60 +353,3 @@ def _format_parse_error(parse_result) -> str:
     return "\n".join(lines)
 
 
-def _build_feedback_items(
-    time_result: Dict,
-    space_result: Optional[Dict],
-    is_correct: bool,
-    score: float
-) -> list:
-    """
-    Build feedback items as list of (level, message) tuples.
-
-    Levels: 'success', 'warning', 'error', 'info'
-    """
-    from typing import List, Tuple
-    items: List[Tuple[str, str]] = []
-
-    # Overall result
-    if is_correct:
-        items.append(("success", "Your algorithm meets the complexity requirements."))
-    else:
-        items.append(("error", "Your algorithm does not meet the complexity requirements."))
-
-    # Time complexity feedback
-    time_correct = time_result['is_correct']
-    detected = time_result['detected'].value
-    expected = time_result['expected'].value
-
-    if time_correct:
-        if time_result['comparison'] < 0:
-            items.append(("success", f"Time complexity: {detected} (better than required {expected})"))
-        else:
-            items.append(("success", f"Time complexity: {detected} (meets requirement)"))
-    else:
-        items.append(("error", f"Time complexity: {detected} (exceeds required {expected})"))
-        items.append(("info", f"Try to optimize your algorithm to achieve {expected} or better."))
-
-    # Student's stated complexity feedback
-    if time_result.get('student_stated'):
-        if time_result.get('student_stated_correct'):
-            items.append(("success", f"Your stated complexity ({time_result['student_stated']}) matches the detected complexity."))
-        else:
-            items.append(("warning", f"Your stated complexity ({time_result['student_stated']}) differs from detected ({detected})."))
-
-    # Space complexity feedback (if applicable)
-    if space_result:
-        space_correct = space_result['is_correct']
-        space_detected = space_result['detected'].value
-        space_expected = space_result['expected'].value
-
-        if space_correct:
-            items.append(("success", f"Space complexity: {space_detected} (meets requirement)"))
-        else:
-            items.append(("error", f"Space complexity: {space_detected} (exceeds required {space_expected})"))
-
-    # Score info
-    if not is_correct and score > 0:
-        items.append(("info", f"Partial credit: {score:.0%}"))
-
-    return items
