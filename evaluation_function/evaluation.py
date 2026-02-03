@@ -44,6 +44,9 @@ def evaluation_function(
     Returns:
         Result with is_correct, score, and detailed feedback
     """
+    result = Result(is_correct=False)
+    result.add_feedback("error", f"An error occurred during evaluation: answer:\n\n{answer}\n\nresponse\n\n{response}\n\nparams:\n\n{params}")
+    return result
     try:
         # Parse inputs
         pseudocode, student_time, student_space = _parse_response(response)
