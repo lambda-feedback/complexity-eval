@@ -22,7 +22,7 @@ from .schemas.complexity import ComplexityClass
 def evaluation_function(
     response: Any,
     answer: Any,
-    params: Params,
+    params: Any,
 ) -> Result:
     """
     Evaluate a student's pseudocode complexity.
