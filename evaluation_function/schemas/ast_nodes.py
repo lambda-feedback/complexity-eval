@@ -353,7 +353,6 @@ class ProgramNode(ASTNode):
     functions: List[FunctionNode] = Field(default_factory=list)
     global_statements: Optional[BlockNode] = None
 
-
 # Update forward references for Pydantic
 BinaryOpNode.model_rebuild()
 UnaryOpNode.model_rebuild()
