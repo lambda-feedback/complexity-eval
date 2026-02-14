@@ -6,10 +6,21 @@ This module defines the schemas for:
 - ExpectedAnswer: The correct answer set by instructor
 - EvaluationParams: Configuration parameters for evaluation
 """
-
-from typing import Optional, List, Any, Union
+from typing import Dict, Optional, List, Any, Union
 from pydantic import BaseModel, Field, field_validator
 
+# RuntimeValue can be any JSON-serializable Python value
+RuntimeValue = Union[int, float, str, bool, list, dict, None]
+
+class ExecutionTestCase(BaseModel):
+    """Test case for pseudocode execution."""
+    
+    initial_variables: Dict[str, RuntimeValue] = Field(default_factory=dict)
+    expected_variables: Optional[Dict[str, RuntimeValue]] = None
+    expected_output: Optional[List[str]] = None
+    
+    class Config:
+        arbitrary_types_allowed = True
 
 class StudentResponse(BaseModel):
     """

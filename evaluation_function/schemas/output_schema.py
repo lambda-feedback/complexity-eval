@@ -221,41 +221,91 @@ class SpaceComplexityResult(BaseModel):
         }
 
 
-class ParseResult(BaseModel):
-    """
-    Result of parsing the pseudocode.
-    """
-    success: bool = Field(
-        ...,
-        description="Whether parsing was successful"
-    )
-    ast: Optional[ProgramNode] = Field(
-        default=None,
-        description="The parsed AST (if successful)"
-    )
-    errors: List[str] = Field(
-        default_factory=list,
-        description="Parse errors encountered"
-    )
-    warnings: List[str] = Field(
-        default_factory=list,
-        description="Parse warnings"
-    )
-    normalized_code: Optional[str] = Field(
-        default=None,
-        description="Preprocessed/normalized pseudocode"
-    )
+# class ParseResult(BaseModel):
+#     """
+#     Result of parsing the pseudocode.
+#     """
+#     success: bool = Field(
+#         ...,
+#         description="Whether parsing was successful"
+#     )
+#     ast: Optional[ProgramNode] = Field(
+#         default=None,
+#         description="The parsed AST (if successful)"
+#     )
+#     errors: List[str] = Field(
+#         default_factory=list,
+#         description="Parse errors encountered"
+#     )
+#     warnings: List[str] = Field(
+#         default_factory=list,
+#         description="Parse warnings"
+#     )
+#     normalized_code: Optional[str] = Field(
+#         default=None,
+#         description="Preprocessed/normalized pseudocode"
+#     )
+    
+#     class Config:
+#         json_schema_extra = {
+#             "example": {
+#                 "success": True,
+#                 "ast": None,
+#                 "errors": [],
+#                 "warnings": ["Inconsistent indentation detected"],
+#                 "normalized_code": "for i = 1 to n do\n  for j = 1 to n do\n    sum = sum + a[i][j]"
+#             }
+#         }
+
+class TestCaseResult(BaseModel):
+    """Result of running a single test case."""
+    
+    input_data: Optional[Dict[str, Any]] = None
+    expected_output: Optional[Dict[str, Any]] = None
+    actual_output: Optional[Dict[str, Any]] = None
+    passed: bool
+    error_message: Optional[str] = None
     
     class Config:
-        json_schema_extra = {
-            "example": {
-                "success": True,
-                "ast": None,
-                "errors": [],
-                "warnings": ["Inconsistent indentation detected"],
-                "normalized_code": "for i = 1 to n do\n  for j = 1 to n do\n    sum = sum + a[i][j]"
-            }
-        }
+        arbitrary_types_allowed = True
+    
+    def __repr__(self):
+        status = "✅ PASSED" if self.passed else "❌ FAILED"
+        return f"TestCaseResult({status}, input={self.input_data}, expect={self.expected_output}, got={self.actual_output}, error={self.error_message})"
+
+
+class ParseResult(BaseModel):
+    """Result of parsing pseudocode."""
+    
+    success: bool
+    ast: Optional[ProgramNode] = None
+    errors: List[str] = Field(default_factory=list)
+    warnings: List[str] = Field(default_factory=list)
+    normalized_code: Optional[str] = None
+    
+    class Config:
+        arbitrary_types_allowed = True
+
+
+class CodeCorrectnessResult(BaseModel):
+    """Overall result of parsing and executing pseudocode."""
+    
+    parse_success: bool
+    parse_errors: List[str] = Field(default_factory=list)
+    parse_warnings: List[str] = Field(default_factory=list)
+    normalized_code: Optional[str] = None
+    execution_results: List[TestCaseResult] = Field(default_factory=list)
+    is_correct: bool
+    feedback: str
+    
+    class Config:
+        arbitrary_types_allowed = True
+    
+    def __repr__(self):
+        status = "✅ CORRECT" if self.is_correct else "❌ INCORRECT"
+        return (f"CodeCorrectnessResult({status}, "
+                f"parse_success={self.parse_success}, "
+                f"tests={len(self.execution_results)})")
 
 
 class ComplexityAnalysis(BaseModel):

@@ -1,726 +1,608 @@
 """
-Comprehensive tests for the Parser module.
+Comprehensive test suite for the pseudocode parser.
 
 Tests cover:
-- Basic parsing functionality
-- Loop parsing (for, while, repeat, foreach)
-- Conditional parsing (if/else/elif)
-- Function parsing
-- Expression parsing
-- Error handling and fallback
-- Structure detection
+- Basic loop detection (FOR, WHILE, FOR EACH, REPEAT)
+- Nested loops
+- Different block styles (indentation, END keywords, curly braces)
+- Conditionals with proper condition parsing
+- Function definitions
+- Edge cases and error handling
 """
 
 import pytest
-from ..parser.parser import PseudocodeParser, ParseError, ParserConfig
+from ..parser.parser import PseudocodeParser, ParserConfig
+from ..parser.preprocessor import PreprocessorConfig
 from ..schemas.ast_nodes import (
-    ProgramNode, FunctionNode, BlockNode, LoopNode, ConditionalNode,
-    AssignmentNode, ReturnNode, FunctionCallNode, VariableNode,
-    LiteralNode, BinaryOpNode, LoopType, NodeType
+    LoopType, NodeType, VariableNode, LiteralNode, 
+    BinaryOpNode, OperatorType
 )
 
 
-class TestBasicParsing:
-    """Tests for basic parsing functionality."""
+class TestBasicForLoops:
+    """Test basic FOR loop parsing."""
     
-    def test_parse_returns_parse_result(self, parser):
-        """Test that parse returns a ParseResult object."""
-        result = parser.parse("x = 1")
+    def test_simple_for_loop_indented(self):
+        """Test FOR loop with indentation-based block."""
+        code = """
+for i = 1 to n
+  print(i)
+  x = x + 1
+"""
+        parser = PseudocodeParser()
+        result = parser.parse(code)
         
-        assert hasattr(result, 'success')
-        assert hasattr(result, 'ast')
-        assert hasattr(result, 'errors')
-        assert hasattr(result, 'warnings')
+        assert result.success
+        assert result.ast is not None
+        assert result.ast.global_statements is not None
+        assert len(result.ast.global_statements.statements) == 1
+        
+        loop = result.ast.global_statements.statements[0]
+        assert loop.node_type == NodeType.LOOP
+        assert loop.loop_type == LoopType.FOR
+        assert loop.iterator.name == "i"
+        assert isinstance(loop.start, LiteralNode)
+        assert loop.start.value == 1
+        assert isinstance(loop.end, VariableNode)
+        assert loop.end.name == "n"
     
-    def test_parse_simple_assignment(self, parser):
-        """Test parsing simple assignment."""
-        result = parser.parse("x = 1")
+    def test_for_loop_with_end_keyword(self):
+        """Test FOR loop with END FOR terminator."""
+        code = """
+FOR i = 1 TO 10
+  x = x + i
+END FOR
+"""
+        parser = PseudocodeParser()
+        result = parser.parse(code)
         
-        assert result.success or len(result.errors) > 0  # May use fallback
+        assert result.success
+        assert result.ast is not None
+        loop = result.ast.global_statements.statements[0]
+        assert loop.loop_type == LoopType.FOR
+        assert loop.iterator.name == "i"
     
-    def test_parse_empty_input(self, parser):
-        """Test parsing empty input."""
-        result = parser.parse("")
+    def test_for_loop_with_curly_braces(self):
+        """Test FOR loop with curly brace block."""
+        code = """
+for i = 1 to n {
+  print(i)
+  sum = sum + i
+}
+"""
+        parser = PseudocodeParser()
+        result = parser.parse(code)
         
-        # Should handle gracefully
-        assert result is not None
+        assert result.success
+        loop = result.ast.global_statements.statements[0]
+        assert loop.loop_type == LoopType.FOR
+        assert loop.body is not None
     
-    def test_parse_whitespace_only(self, parser):
-        """Test parsing whitespace-only input."""
-        result = parser.parse("   \n\n   ")
+    def test_for_loop_with_do_keyword(self):
+        """Test FOR loop with DO keyword."""
+        code = """
+for i = 0 to n-1 do
+  array[i] = 0
+end for
+"""
+        parser = PseudocodeParser()
+        result = parser.parse(code)
         
-        assert result is not None
-    
-    def test_normalized_code_returned(self, parser):
-        """Test that normalized code is included in result."""
-        result = parser.parse("FOR i = 1 TO n DO\n    print(i)\nEND FOR")
-        
-        assert result.normalized_code is not None
+        assert result.success
+        loop = result.ast.global_statements.statements[0]
+        assert loop.loop_type == LoopType.FOR
 
 
-class TestForLoopParsing:
-    """Tests for FOR loop parsing."""
+class TestWhileLoops:
+    """Test WHILE loop parsing."""
     
-    def test_parse_simple_for_loop(self, parser, simple_for_loop):
-        """Test parsing simple FOR loop."""
-        result = parser.parse(simple_for_loop)
-        
-        # Check structure was detected
-        structure = parser.detect_structure(simple_for_loop)
-        assert structure['has_loops']
-        assert structure['loop_count'] >= 1
-    
-    def test_parse_for_loop_with_range(self, parser):
-        """Test parsing FOR loop with numeric range."""
-        code = """FOR i = 1 TO 10 DO
-    print(i)
-END FOR"""
+    def test_simple_while_loop(self):
+        """Test basic WHILE loop."""
+        code = """
+while x > 0
+  x = x - 1
+end while
+"""
+        parser = PseudocodeParser()
         result = parser.parse(code)
         
-        structure = parser.detect_structure(code)
-        assert structure['has_loops']
+        assert result.success
+        loop = result.ast.global_statements.statements[0]
+        assert loop.loop_type == LoopType.WHILE
+        assert loop.condition is not None
     
-    def test_parse_for_loop_with_step(self, parser):
-        """Test parsing FOR loop with step."""
-        code = """FOR i = 1 TO n STEP 2 DO
-    print(i)
-END FOR"""
+    def test_while_with_do(self):
+        """Test WHILE loop with DO keyword."""
+        code = """
+WHILE count < 100 DO
+  count = count + 1
+DONE
+"""
+        parser = PseudocodeParser()
         result = parser.parse(code)
         
-        structure = parser.detect_structure(code)
-        assert structure['has_loops']
+        assert result.success
+        loop = result.ast.global_statements.statements[0]
+        assert loop.loop_type == LoopType.WHILE
     
-    def test_parse_for_loop_downto(self, parser):
-        """Test parsing FOR loop with DOWNTO."""
-        code = """FOR i = n DOWNTO 1 DO
-    print(i)
-END FOR"""
+    def test_while_with_complex_condition(self):
+        """Test WHILE with comparison operator."""
+        code = """
+while n >= 1 {
+  n = n / 2
+}
+"""
+        parser = PseudocodeParser()
         result = parser.parse(code)
         
-        structure = parser.detect_structure(code)
-        assert structure['has_loops']
+        assert result.success
+        loop = result.ast.global_statements.statements[0]
+        assert loop.loop_type == LoopType.WHILE
+        # Check that condition was parsed
+        assert loop.condition is not None
+        assert isinstance(loop.condition, (VariableNode, BinaryOpNode))
+
+
+class TestForEachLoops:
+    """Test FOR EACH loop parsing."""
     
-    def test_parse_nested_for_loops(self, parser, nested_for_loops):
-        """Test parsing nested FOR loops."""
-        result = parser.parse(nested_for_loops)
+    def test_for_each_basic(self):
+        """Test basic FOR EACH loop."""
+        code = """
+for each item in collection
+  process(item)
+end for
+"""
+        parser = PseudocodeParser()
+        result = parser.parse(code)
         
-        structure = parser.detect_structure(nested_for_loops)
-        assert structure['has_loops']
+        assert result.success
+        loop = result.ast.global_statements.statements[0]
+        assert loop.loop_type == LoopType.FOR_EACH
+        assert loop.iterator.name == "item"
+        assert loop.collection.name == "collection"
+    
+    def test_for_in_without_each(self):
+        """Test FOR...IN syntax without EACH."""
+        code = """
+for element in array {
+  sum = sum + element
+}
+"""
+        parser = PseudocodeParser()
+        result = parser.parse(code)
+        
+        assert result.success
+        loop = result.ast.global_statements.statements[0]
+        assert loop.loop_type == LoopType.FOR_EACH
+
+
+class TestRepeatLoops:
+    """Test REPEAT...UNTIL loops."""
+    
+    def test_repeat_until(self):
+        """Test REPEAT...UNTIL loop."""
+        code = """
+repeat
+  x = x * 2
+until x > 100
+"""
+        parser = PseudocodeParser()
+        result = parser.parse(code)
+        
+        assert result.success
+        loop = result.ast.global_statements.statements[0]
+        assert loop.loop_type == LoopType.REPEAT_UNTIL
+
+
+class TestNestedLoops:
+    """Test nested loop parsing."""
+    
+    def test_nested_for_loops(self):
+        """Test two nested FOR loops."""
+        code = """
+for i = 1 to n
+  for j = 1 to m
+    matrix[i][j] = 0
+  end for
+end for
+"""
+        parser = PseudocodeParser()
+        result = parser.parse(code)
+        
+        assert result.success
+        outer_loop = result.ast.global_statements.statements[0]
+        assert outer_loop.loop_type == LoopType.FOR
+        assert outer_loop.nesting_level == 0
+        
+        # Check that inner loop exists in outer loop's body
+        assert outer_loop.body is not None
+        assert len(outer_loop.body.statements) > 0
+        inner_loop = outer_loop.body.statements[0]
+        assert inner_loop.loop_type == LoopType.FOR
+        assert inner_loop.nesting_level > 0
+    
+    def test_triple_nested_loops_with_braces(self):
+        """Test three nested loops with curly braces."""
+        code = """
+for i = 1 to n {
+  for j = 1 to n {
+    for k = 1 to n {
+      sum = sum + 1
+    }
+  }
+}
+"""
+        parser = PseudocodeParser()
+        result = parser.parse(code)
+        
+        assert result.success
+        structure = parser.detect_structure(code)
         assert structure['has_nested_loops']
-        assert structure['loop_count'] >= 2
-    
-    def test_parse_triple_nested_loops(self, parser, triple_nested_loops):
-        """Test parsing triple nested loops."""
-        result = parser.parse(triple_nested_loops)
-        
-        structure = parser.detect_structure(triple_nested_loops)
-        assert structure['has_loops']
-        assert structure['has_nested_loops']
-        assert structure['loop_count'] >= 3
+        assert structure['max_nesting'] == 3
+        assert structure['loop_count'] == 3
 
 
-class TestWhileLoopParsing:
-    """Tests for WHILE loop parsing."""
+class TestConditionals:
+    """Test conditional (IF) statement parsing."""
     
-    def test_parse_simple_while_loop(self, parser, while_loop):
-        """Test parsing simple WHILE loop."""
-        result = parser.parse(while_loop)
-        
-        structure = parser.detect_structure(while_loop)
-        assert structure['has_loops']
-    
-    def test_parse_while_with_complex_condition(self, parser):
-        """Test parsing WHILE with complex condition."""
-        code = """WHILE i < n AND j > 0 DO
-    i = i + 1
-    j = j - 1
-END WHILE"""
+    def test_simple_if(self):
+        """Test basic IF statement."""
+        code = """
+if x > 0
+  print("positive")
+end if
+"""
+        parser = PseudocodeParser()
         result = parser.parse(code)
         
-        structure = parser.detect_structure(code)
-        assert structure['has_loops']
+        assert result.success
+        cond = result.ast.global_statements.statements[0]
+        assert cond.node_type == NodeType.CONDITIONAL
+        # FIX: Check that condition was actually parsed
+        assert cond.condition is not None
+        assert cond.then_branch is not None
     
-    def test_parse_nested_while_loops(self, parser):
-        """Test parsing nested WHILE loops."""
-        code = """WHILE i < n DO
-    WHILE j < m DO
-        x = x + 1
-        j = j + 1
-    END WHILE
-    i = i + 1
-END WHILE"""
+    def test_if_then_else(self):
+        """Test IF-THEN-ELSE."""
+        code = """
+if n == 0 then
+  return 1
+else
+  return n * factorial(n-1)
+endif
+"""
+        parser = PseudocodeParser()
         result = parser.parse(code)
         
-        structure = parser.detect_structure(code)
-        assert structure['has_loops']
-        assert structure['loop_count'] >= 2
-
-
-class TestRepeatUntilParsing:
-    """Tests for REPEAT-UNTIL loop parsing."""
+        assert result.success
+        cond = result.ast.global_statements.statements[0]
+        assert cond.condition is not None
+        assert cond.then_branch is not None
+        assert cond.else_branch is not None
     
-    def test_parse_repeat_until(self, parser, repeat_until_loop):
-        """Test parsing REPEAT-UNTIL loop."""
-        result = parser.parse(repeat_until_loop)
-        
-        structure = parser.detect_structure(repeat_until_loop)
-        assert structure['has_loops']
-    
-    def test_parse_repeat_with_complex_body(self, parser):
-        """Test parsing REPEAT with complex body."""
-        code = """REPEAT
-    x = x + 1
-    y = y * 2
-    IF x > 10 THEN
-        z = z + 1
-    END IF
-UNTIL x >= n"""
-        result = parser.parse(code)
-        
-        structure = parser.detect_structure(code)
-        assert structure['has_loops']
-        assert structure['has_conditionals']
-
-
-class TestForEachParsing:
-    """Tests for FOR-EACH loop parsing."""
-    
-    def test_parse_foreach_loop(self, parser, foreach_loop):
-        """Test parsing FOR-EACH loop."""
-        result = parser.parse(foreach_loop)
-        
-        structure = parser.detect_structure(foreach_loop)
-        assert structure['has_loops']
-    
-    def test_parse_foreach_variations(self, parser):
-        """Test parsing FOR-EACH variations."""
-        variations = [
-            "FOR EACH item IN list DO\n    print(item)\nEND FOR",
-            "FOR item IN list DO\n    print(item)\nEND FOR",
-            "for each x in array do\n    process(x)\nend for",
+    def test_if_with_comparison_operators(self):
+        """Test IF with various comparison operators."""
+        test_cases = [
+            ("if x == 5", OperatorType.EQUAL),
+            ("if x != 5", OperatorType.NOT_EQUAL),
+            ("if x < 5", OperatorType.LESS_THAN),
+            ("if x <= 5", OperatorType.LESS_EQUAL),
+            ("if x > 5", OperatorType.GREATER_THAN),
+            ("if x >= 5", OperatorType.GREATER_EQUAL),
         ]
         
-        for code in variations:
+        parser = PseudocodeParser()
+        
+        for condition_str, expected_op in test_cases:
+            code = f"""
+{condition_str}
+  x = 1
+end if
+"""
             result = parser.parse(code)
-            structure = parser.detect_structure(code)
-            assert structure['has_loops']
+            assert result.success
+            cond = result.ast.global_statements.statements[0]
+            assert cond.condition is not None
+            
+            # If it's a binary op, check the operator
+            if isinstance(cond.condition, BinaryOpNode):
+                assert cond.condition.operator == expected_op
 
 
-class TestConditionalParsing:
-    """Tests for conditional (IF/ELSE) parsing."""
+class TestFunctions:
+    """Test function definition parsing."""
     
-    def test_parse_simple_if(self, parser):
-        """Test parsing simple IF statement."""
-        code = """IF x > 0 THEN
-    print(x)
-END IF"""
+    def test_function_definition(self):
+        """Test basic function definition."""
+        code = """
+function factorial(n)
+  if n == 0
+    return 1
+  else
+    return n * factorial(n-1)
+  end if
+end function
+"""
+        parser = PseudocodeParser()
         result = parser.parse(code)
         
-        structure = parser.detect_structure(code)
-        assert structure['has_conditionals']
+        assert result.success
+        assert len(result.ast.functions) == 1
+        func = result.ast.functions[0]
+        assert func.name == "factorial"
     
-    def test_parse_if_else(self, parser):
-        """Test parsing IF-ELSE statement."""
-        code = """IF x > 0 THEN
-    print("positive")
-ELSE
-    print("non-positive")
-END IF"""
+    def test_algorithm_keyword(self):
+        """Test ALGORITHM keyword for function definition."""
+        code = """
+algorithm bubbleSort(arr)
+  for i = 1 to n
+    for j = 1 to n-1
+      if arr[j] > arr[j+1]
+        swap(arr[j], arr[j+1])
+      end if
+    end for
+  end for
+end algorithm
+"""
+        parser = PseudocodeParser()
         result = parser.parse(code)
         
-        structure = parser.detect_structure(code)
-        assert structure['has_conditionals']
-    
-    def test_parse_if_elif_else(self, parser):
-        """Test parsing IF-ELIF-ELSE statement."""
-        code = """IF x > 0 THEN
-    print("positive")
-ELIF x < 0 THEN
-    print("negative")
-ELSE
-    print("zero")
-END IF"""
-        result = parser.parse(code)
-        
-        structure = parser.detect_structure(code)
-        assert structure['has_conditionals']
-    
-    def test_parse_nested_conditionals(self, parser):
-        """Test parsing nested conditionals."""
-        code = """IF x > 0 THEN
-    IF y > 0 THEN
-        print("both positive")
-    ELSE
-        print("x positive, y non-positive")
-    END IF
-ELSE
-    print("x non-positive")
-END IF"""
-        result = parser.parse(code)
-        
-        structure = parser.detect_structure(code)
-        assert structure['has_conditionals']
+        assert result.success
+        assert len(result.ast.functions) == 1
+        assert result.ast.functions[0].name == "bubbleSort"
 
 
-class TestFunctionParsing:
-    """Tests for function definition parsing."""
+class TestBlockStyles:
+    """Test different block delimiting styles."""
     
-    def test_parse_simple_function(self, parser):
-        """Test parsing simple function definition."""
-        code = """FUNCTION test()
-    RETURN 1
-END FUNCTION"""
+    def test_mixed_indentation_and_end_keywords(self):
+        """Test mixing indentation with END keywords."""
+        code = """
+for i = 1 to n
+  if i % 2 == 0
+    print(i)
+  end if
+end for
+"""
+        parser = PseudocodeParser()
         result = parser.parse(code)
         
-        if result.success and result.ast:
-            assert len(result.ast.functions) > 0 or result.ast.global_statements is not None
+        assert result.success
     
-    def test_parse_function_with_parameters(self, parser):
-        """Test parsing function with parameters."""
-        code = """FUNCTION add(a, b)
-    RETURN a + b
-END FUNCTION"""
+    def test_curly_braces_on_same_line(self):
+        """Test opening brace on same line as statement."""
+        code = """
+for i = 1 to n {
+  x = x + i
+}
+"""
+        parser = PseudocodeParser()
         result = parser.parse(code)
         
-        # Should parse without errors or use fallback
-        assert result is not None
+        assert result.success
     
-    def test_parse_function_with_array_parameter(self, parser):
-        """Test parsing function with array parameter."""
-        code = """FUNCTION sum(A[1..n])
-    total = 0
-    FOR i = 1 TO n DO
-        total = total + A[i]
-    END FOR
-    RETURN total
-END FUNCTION"""
+    def test_curly_braces_on_next_line(self):
+        """Test opening brace on next line."""
+        code = """
+while x > 0
+{
+  x = x - 1
+}
+"""
+        parser = PseudocodeParser()
         result = parser.parse(code)
         
-        assert result is not None
-    
-    def test_parse_multiple_functions(self, parser, multiple_functions):
-        """Test parsing multiple function definitions."""
-        result = parser.parse(multiple_functions)
-        
-        # Should recognize multiple functions
-        assert result is not None
-    
-    def test_parse_recursive_function(self, parser, recursive_fibonacci):
-        """Test parsing recursive function."""
-        result = parser.parse(recursive_fibonacci)
-        
-        structure = parser.detect_structure(recursive_fibonacci)
-        assert structure['has_recursion']
+        assert result.success
 
 
-class TestRecursionDetection:
-    """Tests for recursion detection."""
+class TestPreprocessing:
+    """Test preprocessing and normalization."""
     
-    def test_detect_simple_recursion(self, parser, recursive_factorial):
-        """Test detection of simple recursion."""
-        structure = parser.detect_structure(recursive_factorial)
-        assert structure['has_recursion']
-    
-    def test_detect_double_recursion(self, parser, recursive_fibonacci):
-        """Test detection of double recursion (like Fibonacci)."""
-        structure = parser.detect_structure(recursive_fibonacci)
-        assert structure['has_recursion']
-    
-    def test_detect_divide_conquer_recursion(self, parser, merge_sort):
-        """Test detection of divide-and-conquer recursion."""
-        structure = parser.detect_structure(merge_sort)
-        assert structure['has_recursion']
-    
-    def test_no_false_recursion_detection(self, parser, linear_search):
-        """Test that non-recursive code is not flagged as recursive."""
-        structure = parser.detect_structure(linear_search)
-        assert not structure['has_recursion']
-
-
-class TestExpressionParsing:
-    """Tests for expression parsing."""
-    
-    def test_parse_arithmetic_expressions(self, parser):
-        """Test parsing arithmetic expressions."""
-        code = "x = a + b * c - d / e"
+    def test_case_normalization(self):
+        """Test that keywords are normalized to lowercase."""
+        code = "FOR i = 1 TO n DO\n  PRINT(i)\nEND FOR"
+        parser = PseudocodeParser()
         result = parser.parse(code)
         
-        assert result is not None
+        assert result.success
+        assert "for" in result.normalized_code.lower()
     
-    def test_parse_comparison_expressions(self, parser):
-        """Test parsing comparison expressions."""
-        expressions = [
-            "IF a == b THEN x = 1 END IF",
-            "IF a != b THEN x = 1 END IF",
-            "IF a < b THEN x = 1 END IF",
-            "IF a <= b THEN x = 1 END IF",
-            "IF a > b THEN x = 1 END IF",
-            "IF a >= b THEN x = 1 END IF",
-        ]
-        
-        for code in expressions:
-            result = parser.parse(code)
-            assert result is not None
-    
-    def test_parse_logical_expressions(self, parser):
-        """Test parsing logical expressions."""
-        code = "IF a AND b OR NOT c THEN x = 1 END IF"
+    def test_operator_normalization(self):
+        """Test that operators are normalized."""
+        code = "x := 5\nif x ≠ 0 then\n  y = 1\nend if"
+        parser = PseudocodeParser()
         result = parser.parse(code)
         
-        assert result is not None
+        assert result.success
+        assert ":=" not in result.normalized_code
+        assert "=" in result.normalized_code
     
-    def test_parse_array_access(self, parser):
-        """Test parsing array access expressions."""
-        code = """x = A[i]
-y = B[i][j]
-z = C[i + 1][j - 1]"""
+    def test_typo_correction(self):
+        """Test that common typos are fixed."""
+        code = "whlie x > 0\n  x = x - 1\nend while"
+        parser = PseudocodeParser()
         result = parser.parse(code)
         
-        assert result is not None
-    
-    def test_parse_function_call_expression(self, parser):
-        """Test parsing function call expressions."""
-        code = """x = max(a, b)
-y = min(c, d)
-z = sqrt(x * x + y * y)"""
-        result = parser.parse(code)
-        
-        assert result is not None
+        assert result.success
+        assert len(result.warnings) > 0
+        assert any("typo" in w.lower() for w in result.warnings)
 
 
 class TestStructureDetection:
-    """Tests for structure detection."""
+    """Test high-level structure detection."""
     
-    def test_detect_no_loops(self, parser):
-        """Test structure detection with no loops."""
-        code = """x = 1
-y = 2
-z = x + y"""
+    def test_detect_simple_loop(self):
+        """Test detecting a single loop."""
+        code = "for i = 1 to n\n  print(i)\nend for"
+        parser = PseudocodeParser()
         structure = parser.detect_structure(code)
         
-        assert not structure['has_loops']
-        assert structure['loop_count'] == 0
-    
-    def test_detect_single_loop(self, parser, simple_for_loop):
-        """Test structure detection with single loop."""
-        structure = parser.detect_structure(simple_for_loop)
-        
         assert structure['has_loops']
-        assert structure['loop_count'] >= 1
-        assert not structure['has_nested_loops'] or structure['max_nesting'] == 1
+        assert structure['loop_count'] == 1
+        assert not structure['has_nested_loops']
+        assert structure['max_nesting'] == 1
     
-    def test_detect_nested_loops(self, parser, nested_for_loops):
-        """Test structure detection with nested loops."""
-        structure = parser.detect_structure(nested_for_loops)
-        
-        assert structure['has_loops']
-        assert structure['has_nested_loops']
-        assert structure['loop_count'] >= 2
-    
-    def test_detect_conditionals(self, parser):
-        """Test structure detection with conditionals."""
-        code = """IF x > 0 THEN
-    y = 1
-ELSE
-    y = -1
-END IF"""
+    def test_detect_nested_loops(self):
+        """Test detecting nested loops."""
+        code = """
+for i = 1 to n
+  for j = 1 to m
+    print(i, j)
+  end for
+end for
+"""
+        parser = PseudocodeParser()
         structure = parser.detect_structure(code)
         
-        assert structure['has_conditionals']
-    
-    def test_detect_complex_structure(self, parser, bubble_sort):
-        """Test structure detection with complex algorithm."""
-        structure = parser.detect_structure(bubble_sort)
-        
         assert structure['has_loops']
+        assert structure['loop_count'] == 2
         assert structure['has_nested_loops']
-        assert structure['has_conditionals']
-
-
-class TestStyleVariations:
-    """Tests for different pseudocode style variations."""
+        assert structure['max_nesting'] == 2
     
-    def test_parse_python_style(self, parser, python_style_loop):
-        """Test parsing Python-style pseudocode."""
-        result = parser.parse(python_style_loop)
-        
-        structure = parser.detect_structure(python_style_loop)
-        assert structure['has_loops']
-    
-    def test_parse_pascal_style(self, parser, pascal_style_loop):
-        """Test parsing Pascal-style pseudocode."""
-        result = parser.parse(pascal_style_loop)
-        
-        structure = parser.detect_structure(pascal_style_loop)
-        assert structure['has_loops']
-    
-    def test_parse_mixed_case(self, parser, mixed_case_keywords):
-        """Test parsing mixed case keywords."""
-        result = parser.parse(mixed_case_keywords)
-        
-        structure = parser.detect_structure(mixed_case_keywords)
-        assert structure['has_loops']
-    
-    def test_parse_unicode_operators(self, parser, unicode_operators):
-        """Test parsing unicode operators."""
-        result = parser.parse(unicode_operators)
-        
-        assert result is not None
-
-
-class TestErrorHandling:
-    """Tests for error handling."""
-    
-    def test_handle_syntax_error(self, parser):
-        """Test handling of syntax errors."""
-        code = "FOR i = 1 TO"  # Incomplete
-        result = parser.parse(code)
-        
-        # Should not crash, may have errors or use fallback
-        assert result is not None
-    
-    def test_handle_mismatched_blocks(self, parser):
-        """Test handling of mismatched block delimiters."""
-        code = """FOR i = 1 TO n DO
-    IF x > 0 THEN
-        print(x)
-END FOR"""  # Missing END IF
-        result = parser.parse(code)
-        
-        assert result is not None
-    
-    def test_handle_unknown_keywords(self, parser):
-        """Test handling of unknown keywords."""
-        code = """UNKNOWN_KEYWORD x = 1
-ANOTHER_WEIRD_THING y = 2"""
-        result = parser.parse(code)
-        
-        assert result is not None
-    
-    def test_fallback_on_parse_error(self, parser):
-        """Test that fallback parser is used on error."""
-        code = """FOR i = 1 TO n DO
-    malformed { syntax [ here
-    x = x + 1
-END FOR"""
-        result = parser.parse(code)
-        
-        # Should use fallback and still detect loop
+    def test_detect_recursion(self):
+        """Test detecting recursive functions."""
+        code = """
+function factorial(n)
+  if n == 0
+    return 1
+  else
+    return n * factorial(n-1)
+  end if
+end function
+"""
+        parser = PseudocodeParser()
         structure = parser.detect_structure(code)
-        assert structure['has_loops']
-    
-    def test_strict_mode_no_fallback(self):
-        """Test that strict mode doesn't use fallback for malformed input."""
-        config = ParserConfig(strict_mode=True)
-        parser = PseudocodeParser(config)
         
-        code = "FOR i = 1 TO"  # Incomplete
-        result = parser.parse(code)
-        
-        # In strict mode, may have errors or warnings, but should still return a result
-        # The parser is now more resilient
-        assert result is not None
-
-
-class TestCompleteAlgorithms:
-    """Tests for parsing complete algorithms."""
-    
-    def test_parse_binary_search(self, parser, binary_search):
-        """Test parsing binary search algorithm."""
-        result = parser.parse(binary_search)
-        
-        structure = parser.detect_structure(binary_search)
-        assert structure['has_loops']
-        assert structure['has_conditionals']
-    
-    def test_parse_bubble_sort(self, parser, bubble_sort):
-        """Test parsing bubble sort algorithm."""
-        result = parser.parse(bubble_sort)
-        
-        structure = parser.detect_structure(bubble_sort)
-        assert structure['has_loops']
-        assert structure['has_nested_loops']
-        assert structure['has_conditionals']
-    
-    def test_parse_merge_sort(self, parser, merge_sort):
-        """Test parsing merge sort algorithm."""
-        result = parser.parse(merge_sort)
-        
-        structure = parser.detect_structure(merge_sort)
         assert structure['has_recursion']
     
-    def test_parse_matrix_multiplication(self, parser, matrix_multiplication):
-        """Test parsing matrix multiplication."""
-        result = parser.parse(matrix_multiplication)
+    def test_detect_conditionals(self):
+        """Test detecting conditionals."""
+        code = "if x > 0\n  print(x)\nend if"
+        parser = PseudocodeParser()
+        structure = parser.detect_structure(code)
         
-        structure = parser.detect_structure(matrix_multiplication)
-        assert structure['has_loops']
-        assert structure['has_nested_loops']
-        assert structure['loop_count'] >= 3
+        assert structure['has_conditionals']
 
 
 class TestEdgeCases:
-    """Tests for edge cases."""
+    """Test edge cases and error handling."""
     
-    def test_deeply_nested_structure(self, parser, deeply_nested):
-        """Test parsing deeply nested structure."""
-        result = parser.parse(deeply_nested)
+    def test_empty_code(self):
+        """Test parsing empty string."""
+        parser = PseudocodeParser()
+        result = parser.parse("")
         
-        structure = parser.detect_structure(deeply_nested)
-        assert structure['has_loops']
+        assert result.success
+        assert result.ast is not None
+    
+    def test_only_comments(self):
+        """Test code with only comments."""
+        code = "// This is a comment\n# Another comment"
+        parser = PseudocodeParser()
+        result = parser.parse(code)
+        
+        assert result.success
+    
+    def test_malformed_loop(self):
+        """Test handling of malformed loop."""
+        code = "for i =\n  print(i)"
+        parser = PseudocodeParser()
+        result = parser.parse(code)
+        
+        # Should not crash, may or may not succeed
+        assert result is not None
+    
+    def test_unmatched_braces(self):
+        """Test handling of unmatched curly braces."""
+        code = "for i = 1 to n {\n  print(i)"
+        parser = PseudocodeParser()
+        result = parser.parse(code)
+        
+        # Should not crash
+        assert result is not None
+
+
+class TestIterationEstimation:
+    """Test loop iteration estimation."""
+    
+    def test_estimate_n_iterations(self):
+        """Test estimation for 1 to n loop."""
+        code = "for i = 1 to n\n  print(i)\nend for"
+        parser = PseudocodeParser()
+        result = parser.parse(code)
+        
+        assert result.success
+        loop = result.ast.global_statements.statements[0]
+        assert loop.estimated_iterations == "n"
+    
+    def test_estimate_concrete_iterations(self):
+        """Test estimation for concrete bounds."""
+        code = "for i = 1 to 10\n  print(i)\nend for"
+        parser = PseudocodeParser()
+        result = parser.parse(code)
+        
+        assert result.success
+        loop = result.ast.global_statements.statements[0]
+        assert loop.estimated_iterations == "10"
+
+
+class TestComplexPrograms:
+    """Test parsing of complex, realistic programs."""
+    
+    def test_bubble_sort(self):
+        """Test parsing bubble sort algorithm."""
+        code = """
+algorithm bubbleSort(arr, n)
+  for i = 0 to n-1
+    for j = 0 to n-i-1
+      if arr[j] > arr[j+1]
+        temp = arr[j]
+        arr[j] = arr[j+1]
+        arr[j+1] = temp
+      end if
+    end for
+  end for
+end algorithm
+"""
+        parser = PseudocodeParser()
+        result = parser.parse(code)
+        
+        assert result.success
+        assert len(result.ast.functions) == 1
+        
+        structure = parser.detect_structure(code)
         assert structure['has_nested_loops']
-        assert structure['loop_count'] >= 5
-    
-    def test_empty_function_body(self, parser, empty_function):
-        """Test parsing empty function body."""
-        result = parser.parse(empty_function)
-        
-        assert result is not None
-    
-    def test_single_statement(self, parser):
-        """Test parsing single statement."""
-        result = parser.parse("x = 1")
-        
-        assert result is not None
-    
-    def test_comments_handling(self, parser):
-        """Test that comments are handled."""
-        code = """// This is a comment
-FOR i = 1 TO n DO
-    # Another comment
-    x = x + 1
-END FOR"""
-        result = parser.parse(code)
-        
-        structure = parser.detect_structure(code)
-        assert structure['has_loops']
-    
-    def test_very_long_code(self, parser):
-        """Test parsing very long code."""
-        # Generate code with many statements
-        statements = [f"x{i} = {i}" for i in range(100)]
-        code = "\n".join(statements)
-
-        result = parser.parse(code)
-
-        assert result is not None
-
-
-class TestCurlyBraceBlocks:
-    """Tests for curly brace block syntax."""
-
-    def test_for_loop_with_curly_braces(self, parser):
-        """Test parsing FOR loop with curly braces."""
-        code = """FOR i = 1 TO n {
-    x = x + 1
-}"""
-        result = parser.parse(code)
-
-        structure = parser.detect_structure(code)
-        assert structure['has_loops']
-        assert structure['loop_count'] >= 1
-
-    def test_while_loop_with_curly_braces(self, parser):
-        """Test parsing WHILE loop with curly braces."""
-        code = """WHILE x > 0 {
-    x = x - 1
-}"""
-        result = parser.parse(code)
-
-        structure = parser.detect_structure(code)
-        assert structure['has_loops']
-
-    def test_if_statement_with_curly_braces(self, parser):
-        """Test parsing IF statement with curly braces."""
-        code = """IF x > 0 {
-    y = 1
-}"""
-        result = parser.parse(code)
-
-        structure = parser.detect_structure(code)
         assert structure['has_conditionals']
-
-    def test_function_with_curly_braces(self, parser):
-        """Test parsing function with curly braces."""
-        code = """FUNCTION test(n) {
-    FOR i = 1 TO n {
-        x = x + 1
-    }
-}"""
+    
+    def test_binary_search(self):
+        """Test parsing binary search with recursion."""
+        code = """
+function binarySearch(arr, target, low, high)
+  if low > high then
+    return -1
+  end if
+  
+  mid = (low + high) / 2
+  
+  if arr[mid] == target then
+    return mid
+  elif arr[mid] > target then
+    return binarySearch(arr, target, low, mid-1)
+  else
+    return binarySearch(arr, target, mid+1, high)
+  end if
+end function
+"""
+        parser = PseudocodeParser()
         result = parser.parse(code)
-
+        
+        assert result.success
         structure = parser.detect_structure(code)
-        assert structure['has_loops']
-
-    def test_nested_loops_with_curly_braces(self, parser):
-        """Test parsing nested loops with curly braces."""
-        code = """FOR i = 1 TO n {
-    FOR j = 1 TO n {
-        x = x + 1
-    }
-}"""
-        result = parser.parse(code)
-
-        structure = parser.detect_structure(code)
-        assert structure['has_loops']
-        assert structure['has_nested_loops']
-        assert structure['loop_count'] >= 2
-
-    def test_mixed_end_and_braces(self, parser):
-        """Test mixing END keywords and curly braces."""
-        code = """FOR i = 1 TO n {
-    IF x > 0 THEN
-        y = 1
-    END IF
-}"""
-        result = parser.parse(code)
-
-        structure = parser.detect_structure(code)
-        assert structure['has_loops']
+        assert structure['has_recursion']
         assert structure['has_conditionals']
 
 
-class TestCallKeyword:
-    """Tests for CALL keyword function invocation."""
-
-    def test_call_keyword_statement(self, parser):
-        """Test CALL keyword for function invocation."""
-        code = """FOR i = 1 TO n DO
-    CALL print(i)
-END FOR"""
-        result = parser.parse(code)
-
-        structure = parser.detect_structure(code)
-        assert structure['has_loops']
-
-    def test_call_keyword_in_function(self, parser):
-        """Test CALL keyword within a function."""
-        code = """FUNCTION test(A, n)
-    FOR i = 1 TO n DO
-        CALL process(A[i])
-    END FOR
-END FUNCTION"""
-        result = parser.parse(code)
-
-        structure = parser.detect_structure(code)
-        assert structure['has_loops']
-
-    def test_direct_function_call(self, parser):
-        """Test direct function call without CALL keyword."""
-        code = """FOR i = 1 TO n DO
-    print(i)
-END FOR"""
-        result = parser.parse(code)
-
-        structure = parser.detect_structure(code)
-        assert structure['has_loops']
-
-    def test_call_with_curly_braces(self, parser):
-        """Test CALL keyword with curly brace blocks."""
-        code = """FOR i = 1 TO n {
-    CALL process(i)
-}"""
-        result = parser.parse(code)
-
-        structure = parser.detect_structure(code)
-        assert structure['has_loops']
+# Run tests with: pytest test_parser.py -v
+if __name__ == "__main__":
+    pytest.main([__file__, "-v", "--tb=short"])

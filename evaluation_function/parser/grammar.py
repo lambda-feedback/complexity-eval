@@ -8,20 +8,19 @@ It uses a simplified approach to avoid LALR conflicts.
 # Simplified Lark grammar for pseudocode
 # Focuses on structure detection rather than full semantic parsing
 PSEUDOCODE_GRAMMAR = r'''
-start: (statement | function_def | _NL)*
+start: (statement | function_def | _NEWLINE)*
 
 // Function definition
-function_def: FUNC_KW NAME "(" [params] ")" block
+function_def: FUNC_KW NAME "(" [params] ")" _NEWLINE? block
 FUNC_KW: "function"i | "algorithm"i | "procedure"i | "def"i
 
 params: NAME ("," NAME)*
 
 // Block (indentation, end-delimited, or curly braces)
-block: _NL _INDENT statement+ _DEDENT
-     | _NL (statement _NL?)* END_KW _NL?
-     | "{" _NL? (statement _NL?)* "}"
+block: "{" _NEWLINE? (statement _NEWLINE?)* "}"
+     | _NEWLINE (statement _NEWLINE?)* END_KW
 
-END_KW: "end"i NAME? | "endif"i | "endfor"i | "endwhile"i | "done"i
+END_KW: "end"i | "endif"i | "endfor"i | "endwhile"i | "done"i | "end" NAME
 
 // Statements
 statement: for_stmt
@@ -37,18 +36,24 @@ statement: for_stmt
 call_stmt: "call"i NAME "(" [args] ")"
 
 // For loop
-for_stmt: "for"i NAME "=" expr "to"i expr ("step"i expr)? block
-        | "for"i NAME "=" expr "downto"i expr ("step"i expr)? block
-        | "for"i "each"i? NAME "in"i expr block
+for_stmt: "for"i NAME "=" expr "to"i expr ("step"i expr)? ("do"i)? _NEWLINE? block
+        | "for"i NAME "=" expr "downto"i expr ("step"i expr)? ("do"i)? _NEWLINE? block
+        | "for"i ("each"i)? NAME "in"i expr ("do"i)? _NEWLINE? block
 
 // While loop
-while_stmt: "while"i expr block
+while_stmt: "while"i expr ("do"i)? _NEWLINE? block
 
 // Repeat until
-repeat_stmt: "repeat"i block "until"i expr
+repeat_stmt: "repeat"i _NEWLINE? block "until"i expr
 
 // If statement
-if_stmt: "if"i expr "then"i? block ("elif"i expr "then"i? block)* ("else"i block)?
+if_stmt: "if"i expr ("then"i)? _NEWLINE? block (elif_branch)* (else_branch)?
+
+elif_branch: "elif"i expr ("then"i)? _NEWLINE? block
+           | "elseif"i expr ("then"i)? _NEWLINE? block
+           | "else"i "if"i expr ("then"i)? _NEWLINE? block
+
+else_branch: "else"i _NEWLINE? block
 
 // Return statement
 return_stmt: "return"i expr?
@@ -60,26 +65,25 @@ assignment: NAME "=" expr
 // Expressions
 ?expr: or_expr
 
-?or_expr: and_expr (("or"i | "||") and_expr)*
+?or_expr: and_expr ( ("or"i | "||") and_expr)*
 
-?and_expr: not_expr (("and"i | "&&") not_expr)*
+?and_expr: not_expr ( ("and"i | "&&") not_expr)*
 
-?not_expr: "not"i not_expr -> not_op
-         | "!" not_expr -> not_op
+?not_expr: ("not"i | "!") not_expr -> not_op
          | comparison
 
 ?comparison: arith (COMP_OP arith)*
-COMP_OP: "==" | "!=" | "<=" | ">=" | "<" | ">" | "="
+COMP_OP: "==" | "!=" | "<=" | ">=" | "<" | ">"
 
 ?arith: term (("+"|"-") term)*
 
 ?term: factor (("*"|"/"|"//"|"%") factor)*
 
-?factor: power ("^" power)*
-       | "-" factor -> neg
-       | "+" factor
+?factor: power
+       | "-" power -> neg
+       | "+" power -> pos
 
-?power: atom
+?power: atom ("^" atom)*
 
 ?atom: NUMBER
      | STRING
@@ -99,15 +103,13 @@ NUMBER: /\d+(\.\d+)?/
 STRING: /"[^"]*"/ | /'[^']*'/
 
 // Whitespace
-_NL: /(\r?\n[\t ]*)+/
-_INDENT: "<INDENT>"
-_DEDENT: "<DEDENT>"
+_NEWLINE: /\r?\n/
 
 // Comments
 COMMENT: "//" /[^\n]*/ | "#" /[^\n]*/
 
 %ignore COMMENT
-%ignore /[\t \f]+/
+%ignore /[ \t\f]+/
 '''
 
 

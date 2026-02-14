@@ -10,7 +10,7 @@ This module provides:
 
 from .preprocessor import Preprocessor, PreprocessorConfig
 from .grammar import PSEUDOCODE_GRAMMAR, SIMPLIFIED_GRAMMAR
-from .parser import PseudocodeParser, ParseError, ParserConfig
+from .parser import PseudocodeParser, ParserConfig
 
 # ASTBuilder is only available if Lark is installed
 try:
@@ -25,6 +25,6 @@ __all__ = [
     "SIMPLIFIED_GRAMMAR",
     "ASTBuilder",
     "PseudocodeParser",
-    "ParseError",
+    # "ParseError",
     "ParserConfig",
 ]
