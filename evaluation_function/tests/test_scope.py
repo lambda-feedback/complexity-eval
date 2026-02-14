@@ -5,18 +5,7 @@ Pytest tests for interpreter scoping behavior.
 import pytest
 
 from ..analyzer.interpreter import Interpreter
-from ..schemas.ast_nodes import (
-    ProgramNode,
-    FunctionNode,
-    BlockNode,
-    AssignmentNode,
-    VariableNode,
-    LiteralNode,
-    BinaryOpNode,
-    OperatorType,
-    FunctionCallNode,
-    ReturnNode,
-)
+from ..schemas.ast_nodes import *
 
 
 def test_global_modification():
@@ -138,16 +127,18 @@ def test_mixed_scoping():
                 target=VariableNode(name="b"),
                 value=LiteralNode(value=2),
             ),
-            FunctionCallNode(
-                function_name="func",
-                arguments=[VariableNode(name="a")],
+            ExpressionStatementNode(
+                expression = FunctionCallNode(
+                    function_name="func",
+                    arguments=[VariableNode(name="a")],
+                )
             ),
         ]),
     )
 
     interp = Interpreter()
     result = interp.run(program)
-    print(result)
+
 
     assert result["variables"]["a"] == 1
     assert result["variables"]["b"] == 200

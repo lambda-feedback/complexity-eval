@@ -277,7 +277,27 @@ class PseudocodeParser:
                 statements.append(ReturnNode(value=value))
                 i += 1
                 continue
-            
+            # Detect standalone function calls
+            func_call_match = re.match(r'^([A-Za-z_]\w*)\s*\((.*)\)\s*$', stripped)
+            if func_call_match:
+                func_name = func_call_match.group(1)
+                args_str = func_call_match.group(2)
+
+                # Optional: ensure it's not a keyword accidentally matched
+                if func_name.lower() not in {"if", "for", "while", "return", "print", "function"}:
+                    args = self._parse_argument_list(args_str)
+
+                    call_node = FunctionCallNode(
+                        function_name=func_name,
+                        arguments=args
+                    )
+
+                    statements.append(
+                        ExpressionStatementNode(expression=call_node)
+                    )
+
+                    i += 1
+                    continue
             # Skip unknown lines
             i += 1
         
@@ -650,7 +670,27 @@ class PseudocodeParser:
                 statements.append(AssignmentNode(target=target, value=value))
                 i += 1
                 continue
-            
+            # Detect standalone function calls
+            func_call_match = re.match(r'^([A-Za-z_]\w*)\s*\((.*)\)\s*$', stripped)
+            if func_call_match:
+                func_name = func_call_match.group(1)
+                args_str = func_call_match.group(2)
+
+                # Optional: ensure it's not a keyword accidentally matched
+                if func_name.lower() not in {"if", "for", "while", "return", "print", "function"}:
+                    args = self._parse_argument_list(args_str)
+
+                    call_node = FunctionCallNode(
+                        function_name=func_name,
+                        arguments=args
+                    )
+
+                    statements.append(
+                        ExpressionStatementNode(expression=call_node)
+                    )
+
+                    i += 1
+                    continue
             # Unknown statement - skip
             i += 1
         

@@ -119,9 +119,9 @@ class Interpreter:
         elif isinstance(node, ConditionalNode):
             self.execute_conditional(node)
 
-        elif isinstance(node, FunctionNode):
-            # Already registered in run()
-            pass
+        # elif isinstance(node, FunctionNode):
+        #     # Already registered in run()
+        #     pass
 
         elif isinstance(node, BlockNode):
             self.execute_block(node)
