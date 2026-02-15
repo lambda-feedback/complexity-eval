@@ -386,6 +386,48 @@ result = increment()
         result = runner.run(code, test_cases=test_cases)
         
         assert result.is_correct
+    def test_standalone_function_call(self, runner):
+        """Test that standalone function calls execute correctly."""
+        code = """
+function increment()
+x = x + 1
+end function
+
+x = 10
+increment()
+    """
+        test_cases = [
+            ExecutionTestCase(
+                initial_variables={},
+                expected_variables={"x": 11},
+                expected_output=[]
+            )
+        ]
+        
+        result = runner.run(code, test_cases=test_cases)
+        
+        assert result.is_correct
+
+    def test_standalone_print_call(self, runner):
+        """Test that standalone function call can produce output."""
+        code = """
+function greet()
+print("hello")
+end function
+
+greet()
+    """
+        test_cases = [
+            ExecutionTestCase(
+                initial_variables={},
+                expected_variables={},
+                expected_output=["hello"]
+            )
+        ]
+        
+        result = runner.run(code, test_cases=test_cases)
+        
+        assert result.is_correct
 
 
 class TestPrintOutput:
