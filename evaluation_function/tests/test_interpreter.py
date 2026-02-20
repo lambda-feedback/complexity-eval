@@ -38,7 +38,7 @@ class TestBasicOperations:
                 value=LiteralNode(value=10)
             )
         ])
-        assert result["variables"]["x"] == 10
+        assert result.variables["x"] == 10
     
     def test_binary_add(self):
         """Test addition operation."""
@@ -52,7 +52,7 @@ class TestBasicOperations:
                 )
             )
         ])
-        assert result["variables"]["result"] == 8
+        assert result.variables["result"] == 8
     
     def test_binary_subtract(self):
         """Test subtraction operation."""
@@ -66,7 +66,7 @@ class TestBasicOperations:
                 )
             )
         ])
-        assert result["variables"]["result"] == 3
+        assert result.variables["result"] == 3
     
     def test_binary_multiply(self):
         """Test multiplication operation."""
@@ -80,7 +80,7 @@ class TestBasicOperations:
                 )
             )
         ])
-        assert result["variables"]["result"] == 12
+        assert result.variables["result"] == 12
     
     def test_binary_divide(self):
         """Test division operation."""
@@ -94,7 +94,7 @@ class TestBasicOperations:
                 )
             )
         ])
-        assert result["variables"]["result"] == 5.0
+        assert result.variables["result"] == 5.0
     
     def test_comparison_equal(self):
         """Test equality comparison."""
@@ -108,7 +108,7 @@ class TestBasicOperations:
                 )
             )
         ])
-        assert result["variables"]["result"] is True
+        assert result.variables["result"] is True
     
     def test_comparison_not_equal(self):
         """Test not equal comparison."""
@@ -122,7 +122,7 @@ class TestBasicOperations:
                 )
             )
         ])
-        assert result["variables"]["result"] is True
+        assert result.variables["result"] is True
     
     def test_comparison_less_than(self):
         """Test less than comparison."""
@@ -136,7 +136,7 @@ class TestBasicOperations:
                 )
             )
         ])
-        assert result["variables"]["result"] is True
+        assert result.variables["result"] is True
     
     def test_comparison_greater_than(self):
         """Test greater than comparison."""
@@ -150,7 +150,7 @@ class TestBasicOperations:
                 )
             )
         ])
-        assert result["variables"]["result"] is True
+        assert result.variables["result"] is True
     
     def test_unary_negation(self):
         """Test unary negation."""
@@ -163,7 +163,7 @@ class TestBasicOperations:
                 )
             )
         ])
-        assert result["variables"]["x"] == -5
+        assert result.variables["x"] == -5
     
     def test_unary_not(self):
         """Test unary NOT operation."""
@@ -176,7 +176,7 @@ class TestBasicOperations:
                 )
             )
         ])
-        assert result["variables"]["x"] is False
+        assert result.variables["x"] is False
 
 
 class TestFIX1_ExpressionStatement:
@@ -209,7 +209,7 @@ class TestFIX1_ExpressionStatement:
             ]
         )
         
-        assert result["variables"]["x"] == 6
+        assert result.variables["x"] == 6
 
 
 class TestFIX2_ReturnNone:
@@ -248,7 +248,7 @@ class TestFIX2_ReturnNone:
             ]
         )
         
-        assert result["variables"]["result"] is None
+        assert result.variables["result"] is None
     
     def test_return_with_value(self):
         """Test normal return with value."""
@@ -270,7 +270,7 @@ class TestFIX2_ReturnNone:
             ]
         )
         
-        assert result["variables"]["result"] == 42
+        assert result.variables["result"] == 42
 
 
 class TestFIX3_ForEachLoop:
@@ -301,7 +301,7 @@ class TestFIX3_ForEachLoop:
             ]
         )
         
-        assert result["variables"]["sum"] == 15
+        assert result.variables["sum"] == 15
     
     def test_for_each_string(self):
         """Test FOR EACH over a string."""
@@ -326,7 +326,7 @@ class TestFIX3_ForEachLoop:
             ]
         )
         
-        assert result["variables"]["count"] == 5
+        assert result.variables["count"] == 5
     
     def test_for_each_tuple(self):
         """Test FOR EACH over a tuple."""
@@ -353,7 +353,7 @@ class TestFIX3_ForEachLoop:
             ]
         )
         
-        assert result["variables"]["product"] == 24
+        assert result.variables["product"] == 24
 
 
 class TestFIX4_RepeatUntilLoop:
@@ -386,7 +386,7 @@ class TestFIX4_RepeatUntilLoop:
         )
         
         # Should execute: 1 -> 2 -> 4 -> 8 -> 16 (stops when >= 10)
-        assert result["variables"]["x"] == 16
+        assert result.variables["x"] == 16
     
     def test_repeat_until_executes_once(self):
         """Test REPEAT UNTIL executes at least once."""
@@ -411,7 +411,7 @@ class TestFIX4_RepeatUntilLoop:
         )
         
         # Should execute once even though condition is true
-        assert result["variables"]["counter"] == 1
+        assert result.variables["counter"] == 1
 
 
 class TestFIX5_NoneCondition:
@@ -434,8 +434,8 @@ class TestFIX5_NoneCondition:
         )
         
         # x should remain 1 (conditional skipped), y should be 2
-        assert result["variables"]["x"] == 1
-        assert result["variables"]["y"] == 2
+        assert result.variables["x"] == 1
+        assert result.variables["y"] == 2
 
 
 class TestFIX6_NoneExpression:
@@ -463,7 +463,7 @@ class TestFIX7_PrintFunction:
             ]
         )
         
-        assert result["output"] == ["Hello"]
+        assert result.output == ["Hello"]
     
     def test_print_multiple_values(self):
         """Test print with multiple arguments."""
@@ -482,7 +482,7 @@ class TestFIX7_PrintFunction:
             ]
         )
         
-        assert result["output"] == ["x = 42"]
+        assert result.output == ["x = 42"]
     
     def test_print_with_variables(self):
         """Test print with variable values."""
@@ -499,7 +499,7 @@ class TestFIX7_PrintFunction:
             ]
         )
         
-        assert result["output"] == ["10 20"]
+        assert result.output == ["10 20"]
     
     def test_multiple_prints(self):
         """Test multiple print statements."""
@@ -520,7 +520,7 @@ class TestFIX7_PrintFunction:
             ]
         )
         
-        assert result["output"] == ["Line 1", "Line 2"]
+        assert result.output == ["Line 1", "Line 2"]
 
 
 class TestFIX8_EmptyFunctionBody:
@@ -545,7 +545,7 @@ class TestFIX8_EmptyFunctionBody:
         )
         
         # Should return None (following Python logic)
-        assert result["variables"]["x"] is None
+        assert result.variables["x"] is None
 
 
 class TestLoops:
@@ -575,7 +575,7 @@ class TestLoops:
             ]
         )
         
-        assert result["variables"]["sum"] == 10
+        assert result.variables["sum"] == 10
     
     def test_while_loop_basic(self):
         """Test basic WHILE loop."""
@@ -612,7 +612,7 @@ class TestLoops:
             ]
         )
         
-        assert result["variables"]["sum"] == 15
+        assert result.variables["sum"] == 15
 
 
 class TestConditionals:
@@ -636,7 +636,7 @@ class TestConditionals:
             ]
         )
         
-        assert result["variables"]["x"] == 1
+        assert result.variables["x"] == 1
     
     def test_if_false_branch(self):
         """Test IF statement taking false branch."""
@@ -656,7 +656,7 @@ class TestConditionals:
             ]
         )
         
-        assert result["variables"]["x"] == 2
+        assert result.variables["x"] == 2
 
 
 class TestFunctions:
@@ -691,7 +691,7 @@ class TestFunctions:
             ]
         )
         
-        assert result["variables"]["result"] == 7
+        assert result.variables["result"] == 7
     
     def test_recursive_factorial(self):
         """Test recursive function."""
@@ -743,7 +743,7 @@ class TestFunctions:
             ]
         )
         
-        assert result["variables"]["result"] == 120
+        assert result.variables["result"] == 120
 
 
 class TestComplexScenarios:
@@ -801,7 +801,7 @@ class TestComplexScenarios:
         # i=2: j=1(2), j=2(4) -> 6
         # i=3: j=1(3), j=2(6) -> 9
         # Total: 18
-        assert result["variables"]["sum"] == 18
+        assert result.variables["sum"] == 18
 
 
 class TestArrayOperations:
@@ -825,7 +825,7 @@ class TestArrayOperations:
             ]
         )
         
-        assert result["variables"]["x"] == 30
+        assert result.variables["x"] == 30
     
     def test_array_assignment(self):
         """Test array element assignment."""
@@ -845,7 +845,7 @@ class TestArrayOperations:
             ]
         )
         
-        assert result["variables"]["arr"] == [1, 99, 3]
+        assert result.variables["arr"] == [1, 99, 3]
 
 
 class TestErrorHandling:

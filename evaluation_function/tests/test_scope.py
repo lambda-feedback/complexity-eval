@@ -49,8 +49,8 @@ def test_global_modification():
     interp = Interpreter()
     result = interp.run(program)
 
-    assert result["variables"]["x"] == 6
-    assert result["variables"]["result"] is None
+    assert result.variables["x"] == 6
+    assert result.variables["result"] is None
 
 
 def test_parameter_isolation():
@@ -91,8 +91,8 @@ def test_parameter_isolation():
     interp = Interpreter()
     result = interp.run(program)
 
-    assert result["variables"]["x"] == 5
-    assert result["variables"]["y"] == 99
+    assert result.variables["x"] == 5
+    assert result.variables["y"] == 99
 
 
 def test_mixed_scoping():
@@ -140,5 +140,5 @@ def test_mixed_scoping():
     result = interp.run(program)
 
 
-    assert result["variables"]["a"] == 1
-    assert result["variables"]["b"] == 200
+    assert result.variables["a"] == 1
+    assert result.variables["b"] == 200

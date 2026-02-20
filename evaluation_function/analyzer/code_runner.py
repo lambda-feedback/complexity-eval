@@ -7,10 +7,10 @@ FIXES:
 - Handles ReturnException at global scope
 """
 
-from typing import List
+from typing import List, Optional
 from ..schemas.input_schema import ExecutionTestCase
 from .interpreter import Interpreter, ReturnException
-from ..schemas.output_schema import CodeCorrectnessResult, TestCaseResult, ParseResult
+from ..schemas.output_schema import CodeCorrectnessResult, InterpreterResult, TestCaseResult, ParseResult
 from ..parser.parser import PseudocodeParser
 
 
@@ -25,9 +25,10 @@ class CodeRunner:
     4. Return aggregated results
     """
 
-    def __init__(self, parser: PseudocodeParser, interpreter: Interpreter):
+    def __init__(self, parser: Optional[PseudocodeParser], interpreter: Interpreter):
         self.parser = parser
         self.interpreter = interpreter
+        assert self.interpreter is not None, "Interpreter instance is required for CodeRunner"
 
     def run(
         self,
@@ -44,6 +45,7 @@ class CodeRunner:
         Returns:
             CodeCorrectnessResult with parse status and execution results
         """
+        assert self.parser is not None, "parser instance is required for CodeRunner to run from source"
 
         # -----------------------------------
         # 1. Parse
@@ -61,7 +63,10 @@ class CodeRunner:
                 is_correct=False,
                 feedback="Parsing failed. Fix syntax errors before execution."
             )
+        return self.run_with_parse_result(parse_result, test_cases)
 
+        
+    def run_with_parse_result(self, parse_result: ParseResult, test_cases: List[ExecutionTestCase]) -> CodeCorrectnessResult:
         # -----------------------------------
         # 2. Execute Test Cases
         # -----------------------------------
@@ -80,28 +85,28 @@ class CodeRunner:
                 error_messages = []
 
                 if test_case.expected_variables is not None:
-                    if result["variables"] != test_case.expected_variables:
+                    if result.variables != test_case.expected_variables:
                         passed = False
                         error_messages.append(
                             f"Variables mismatch: expected {test_case.expected_variables}, "
-                            f"got {result['variables']}"
+                            f"got {result.variables}"
                         )
 
                 if test_case.expected_output is not None:
-                    if result["output"] != test_case.expected_output:
+                    if result.output != test_case.expected_output:
                         passed = False
                         error_messages.append(
                             f"Output mismatch: expected {test_case.expected_output}, "
-                            f"got {result['output']}"
+                            f"got {result.output}"
                         )
 
                 execution_results.append(
                     TestCaseResult(
                         input_data=test_case.initial_variables,
-                        expected_output={
-                            "variables": test_case.expected_variables,
-                            "output": test_case.expected_output
-                        },
+                        expected_output=InterpreterResult(
+                            variables=test_case.expected_variables,
+                            output=test_case.expected_output
+                        ),
                         actual_output=result,
                         passed=passed,
                         error_message="; ".join(error_messages) if error_messages else None
@@ -114,11 +119,14 @@ class CodeRunner:
                 execution_results.append(
                     TestCaseResult(
                         input_data=test_case.initial_variables,
-                        expected_output={
-                            "variables": test_case.expected_variables,
-                            "output": test_case.expected_output
-                        },
-                        actual_output=None,
+                        expected_output=InterpreterResult(
+                            variables=test_case.expected_variables,
+                            output=test_case.expected_output
+                        ),
+                        actual_output=InterpreterResult(
+                            variables={},
+                            output=[]
+                        ),
                         passed=False,
                         error_message=f"Unexpected return statement (returned {e.value})"
                     )
@@ -128,11 +136,14 @@ class CodeRunner:
                 execution_results.append(
                     TestCaseResult(
                         input_data=test_case.initial_variables,
-                        expected_output={
-                            "variables": test_case.expected_variables,
-                            "output": test_case.expected_output
-                        },
-                        actual_output=None,
+                        expected_output=InterpreterResult(
+                            variables=test_case.expected_variables,
+                            output=test_case.expected_output
+                        ),
+                        actual_output=InterpreterResult(
+                            variables={},
+                            output=[]
+                        ),
                         passed=False,
                         error_message=f"Variable or function not defined: {str(e)}"
                     )
@@ -142,11 +153,14 @@ class CodeRunner:
                 execution_results.append(
                     TestCaseResult(
                         input_data=test_case.initial_variables,
-                        expected_output={
-                            "variables": test_case.expected_variables,
-                            "output": test_case.expected_output
-                        },
-                        actual_output=None,
+                        expected_output=InterpreterResult(
+                            variables=test_case.expected_variables,
+                            output=test_case.expected_output
+                        ),
+                        actual_output=InterpreterResult(
+                            variables={},
+                            output=[]
+                        ),
                         passed=False,
                         error_message="Division by zero"
                     )
@@ -156,11 +170,14 @@ class CodeRunner:
                 execution_results.append(
                     TestCaseResult(
                         input_data=test_case.initial_variables,
-                        expected_output={
-                            "variables": test_case.expected_variables,
-                            "output": test_case.expected_output
-                        },
-                        actual_output=None,
+                        expected_output=InterpreterResult(
+                            variables=test_case.expected_variables,
+                            output=test_case.expected_output
+                        ),
+                                                actual_output=InterpreterResult(
+                            variables={},
+                            output=[]
+                        ),
                         passed=False,
                         error_message=f"Array index error: {str(e)}"
                     )
@@ -170,11 +187,14 @@ class CodeRunner:
                 execution_results.append(
                     TestCaseResult(
                         input_data=test_case.initial_variables,
-                        expected_output={
-                            "variables": test_case.expected_variables,
-                            "output": test_case.expected_output
-                        },
-                        actual_output=None,
+                        expected_output=InterpreterResult(
+                            variables=test_case.expected_variables,
+                            output=test_case.expected_output
+                        ),
+                        actual_output=InterpreterResult(
+                            variables={},
+                            output=[]
+                        ),
                         passed=False,
                         error_message=f"Type error: {str(e)}"
                     )
@@ -184,11 +204,14 @@ class CodeRunner:
                 execution_results.append(
                     TestCaseResult(
                         input_data=test_case.initial_variables,
-                        expected_output={
-                            "variables": test_case.expected_variables,
-                            "output": test_case.expected_output
-                        },
-                        actual_output=None,
+                        expected_output=InterpreterResult(
+                            variables=test_case.expected_variables,
+                            output=test_case.expected_output
+                        ),
+                        actual_output=InterpreterResult(
+                            variables={},
+                            output=[]
+                        ),
                         passed=False,
                         error_message=f"Runtime error: {str(e)}"
                     )
@@ -199,11 +222,14 @@ class CodeRunner:
                 execution_results.append(
                     TestCaseResult(
                         input_data=test_case.initial_variables,
-                        expected_output={
-                            "variables": test_case.expected_variables,
-                            "output": test_case.expected_output
-                        },
-                        actual_output=None,
+                        expected_output=InterpreterResult(
+                            variables=test_case.expected_variables,
+                            output=test_case.expected_output
+                        ),
+                        actual_output=InterpreterResult(
+                            variables={},
+                            output=[]
+                        ),
                         passed=False,
                         error_message=f"{type(e).__name__}: {str(e)}"
                     )
@@ -212,7 +238,6 @@ class CodeRunner:
         # -----------------------------------
         # 3. Aggregate Results
         # -----------------------------------
-
         all_passed = all(r.passed for r in execution_results)
 
         # Generate feedback

@@ -5,12 +5,11 @@ Corrected Design:
 - FunctionCallNode is an ExpressionNode
 - ExpressionStatementNode wraps expressions used as statements
 - Proper separation of StatementNode and ExpressionNode
-- Fixed ConditionalNode to have optional condition for parser compatibility
 """
 
 from typing import Optional, List, Any, Union
 from enum import Enum
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 # ============================================================
@@ -22,14 +21,12 @@ class NodeType(str, Enum):
     FUNCTION = "function"
     BLOCK = "block"
 
-    # Statements
     LOOP = "loop"
     CONDITIONAL = "conditional"
     ASSIGNMENT = "assignment"
     RETURN = "return"
     EXPRESSION_STATEMENT = "expression_statement"
 
-    # Expressions
     VARIABLE = "variable"
     LITERAL = "literal"
     BINARY_OP = "binary_op"
@@ -49,7 +46,6 @@ class LoopType(str, Enum):
 
 
 class OperatorType(str, Enum):
-    # Arithmetic
     ADD = "+"
     SUBTRACT = "-"
     MULTIPLY = "*"
@@ -58,7 +54,6 @@ class OperatorType(str, Enum):
     POWER = "^"
     FLOOR_DIVIDE = "//"
 
-    # Comparison
     EQUAL = "=="
     NOT_EQUAL = "!="
     LESS_THAN = "<"
@@ -66,12 +61,10 @@ class OperatorType(str, Enum):
     GREATER_THAN = ">"
     GREATER_EQUAL = ">="
 
-    # Logical
     AND = "and"
     OR = "or"
     NOT = "not"
 
-    # Assignment
     ASSIGN = "="
     ADD_ASSIGN = "+="
     SUB_ASSIGN = "-="
@@ -89,8 +82,7 @@ class SourceLocation(BaseModel):
     end_line: Optional[int] = None
     end_column: Optional[int] = None
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)
 
 
 # ============================================================
@@ -102,17 +94,14 @@ class ASTNode(BaseModel):
     location: Optional[SourceLocation] = None
     metadata: dict = Field(default_factory=dict)
 
-    class Config:
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 class StatementNode(ASTNode):
-    """Base class for all statements."""
     pass
 
 
 class ExpressionNode(ASTNode):
-    """Base class for all expressions."""
     pass
 
 
@@ -194,21 +183,15 @@ class LoopNode(StatementNode):
 
     loop_type: LoopType = LoopType.FOR
 
-    # For classic for loops
     iterator: Optional[VariableNode] = None
     start: Optional[ExpressionNode] = None
     end: Optional[ExpressionNode] = None
     step: Optional[ExpressionNode] = None
 
-    # For for-each
     collection: Optional[ExpressionNode] = None
-
-    # For while / do-while
     condition: Optional[ExpressionNode] = None
+    body: Optional[BlockNode] = None
 
-    body: Optional["BlockNode"] = None
-
-    # Analysis metadata
     estimated_iterations: Optional[str] = None
     nesting_level: int = 0
 
@@ -216,7 +199,6 @@ class LoopNode(StatementNode):
 class ConditionalNode(StatementNode):
     node_type: NodeType = Field(default=NodeType.CONDITIONAL, frozen=True)
 
-    # Made optional to handle parsing edge cases
     condition: Optional[ExpressionNode] = None
     then_branch: BlockNode
     else_branch: Optional[BlockNode] = None

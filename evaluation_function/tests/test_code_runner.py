@@ -67,12 +67,11 @@ class TestParsingAndExecution:
         ]
         
         result = runner.run(code, test_cases=test_cases)
-        
         assert result.parse_success
         assert result.is_correct
         assert len(result.execution_results) == 1
         assert result.execution_results[0].passed
-        assert result.execution_results[0].actual_output["variables"]["x"] == 42
+        assert result.execution_results[0].actual_output.variables["x"] == 42
     
     def test_arithmetic_expression(self, runner):
         """Test arithmetic expression."""
@@ -505,7 +504,7 @@ class TestErrorHandling:
         ]
         
         result = runner.run(code, test_cases=test_cases)
-        
+
         assert result.parse_success
         assert not result.is_correct
         assert not result.execution_results[0].passed

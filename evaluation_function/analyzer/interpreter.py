@@ -16,6 +16,8 @@ FIXES:
 from typing import Any, Dict, List, Optional, Union
 from copy import deepcopy
 
+from evaluation_function.schemas.output_schema import InterpreterResult
+
 from ..schemas.input_schema import RuntimeValue
 from ..schemas.ast_nodes import *
 
@@ -49,12 +51,12 @@ class Interpreter:
         self,
         program: ProgramNode,
         initial_variables: Optional[Dict[str, RuntimeValue]] = None,
-    ) -> Dict[str, Any]:
+    ) -> InterpreterResult:
         """
         Execute a program with optional initial variables.
         
         Returns:
-            Dict with 'variables' and 'output' keys
+            InterpreterResult object with 'variables' and 'output' fields
         """
         self.variables = deepcopy(initial_variables) if initial_variables else {}
         self.functions = {}
@@ -67,11 +69,11 @@ class Interpreter:
         # Execute global statements
         if program.global_statements:
             self.execute_block(program.global_statements)
-
-        return {
-            "variables": deepcopy(self.variables),
-            "output": list(self.output)
-        }
+        var = deepcopy(self.variables)
+        return InterpreterResult(
+            variables={} if not var else var,
+            output=[] if not list(self.output) else self.output
+        )
 
     # -----------------------------------
     # Block Execution

@@ -10,15 +10,29 @@ This module implements the main evaluation pipeline that:
 The answer specifies a complexity upper bound that the student's code must meet.
 """
 
-from typing import Any, Dict, Optional, Tuple
-from lf_toolkit.evaluation import Result, Params
+from typing import Any, Dict, Optional, Tuple, List, Union
+from lf_toolkit.evaluation import Result
 
+from .schemas.output_schema import (
+    ParseResult,
+    SpaceComplexityResult,
+    TestCaseResult,
+    TimeComplexityResult,
+)
+
+from .schemas.input_schema import ExpectedAnswer, StudentResponse, EvaluationParams
+from .analyzer.code_runner import CodeRunner
+from .analyzer.interpreter import Interpreter
 from .parser.parser import PseudocodeParser
 from .analyzer.complexity_analyzer import ComplexityAnalyzer, AnalysisResult
 from .analyzer.feedback_generator import FeedbackGenerator, FeedbackLevel
 from .schemas.complexity import ComplexityClass
 
 
+# previous observations seem to indicate that sometimes
+# the response, answer, and params are all stuffed into params, this is likely a shimmy issue
+# while the params is never here
+# we'll just use the FSA solution - make the params a field in params
 def evaluation_function(
     response: Any,
     answer: Any,
@@ -44,65 +58,144 @@ def evaluation_function(
     Returns:
         Result with is_correct, score, and detailed feedback
     """
-    # result = Result(is_correct=False)
-    # result.add_feedback("error", f"An error occurred during evaluation: answer:\n\n{answer}\n\nresponse\n\n{response}\n\nparams:\n\n{params}")
-    # return result
     try:
-        # Parse inputs
-        pseudocode, student_time, student_space = _parse_response(response)
-        expected_time, expected_space, eval_options = _parse_answer(answer, params)
+        # ---------------------------------------------------------
+        # Handle shim case
+        # ---------------------------------------------------------
+        if answer is None or response is None:
+            answer = params.get("answer")
+            response = params.get("response")
+            params = params.get("params", {})
 
-        # Validate inputs
+        # ---------------------------------------------------------
+        # Strict validation using Pydantic
+        # ---------------------------------------------------------
+        response_model = (
+            StudentResponse.model_validate_json(response)
+            if isinstance(response, str)
+            else StudentResponse.model_validate(response)
+        )
+
+        answer_model = (
+            ExpectedAnswer.model_validate_json(answer)
+            if isinstance(answer, str)
+            else ExpectedAnswer.model_validate(answer)
+        )
+
+        params_model = (
+            EvaluationParams.model_validate(params)
+            if params
+            else EvaluationParams()
+        )
+
+        # Override params if instructor provided eval_options
+        if answer_model.eval_options:
+            params_model = answer_model.eval_options
+
+        # ---------------------------------------------------------
+        # Extract validated values
+        # ---------------------------------------------------------
+        pseudocode = response_model.pseudocode
+        student_time = response_model.time_complexity
+        student_space = response_model.space_complexity
+
+        expected_time = ComplexityClass.from_string(
+            answer_model.expected_time_complexity
+        )
+
+        expected_space = (
+            ComplexityClass.from_string(answer_model.expected_space_complexity)
+            if answer_model.expected_space_complexity
+            else None
+        )
+
+        # ---------------------------------------------------------
+        # Validate pseudocode presence
+        # ---------------------------------------------------------
         if not pseudocode:
             result = Result(is_correct=False)
             result.add_feedback("error", "No pseudocode provided. Please submit your algorithm.")
             return result
 
-        # Parse and analyze the pseudocode
+        # ---------------------------------------------------------
+        # Parse pseudocode
+        # ---------------------------------------------------------
         parser = PseudocodeParser()
         parse_result = parser.parse(pseudocode)
 
-        if not parse_result.success and eval_options.get('strict_parsing', False):
+        if not parse_result.success and params_model.strict_parsing:
             result = Result(is_correct=False)
             result.add_feedback("error", _format_parse_error(parse_result))
             return result
 
+        # ---------------------------------------------------------
         # Analyze complexity
+        # ---------------------------------------------------------
         analyzer = ComplexityAnalyzer()
         analysis = analyzer.analyze(pseudocode, parse_result.ast)
 
+        # ---------------------------------------------------------
         # Evaluate time complexity
-        time_result = _evaluate_complexity(
+        # ---------------------------------------------------------
+        time_result: TimeComplexityResult = _evaluate_complexity(
             detected=analysis.time_complexity,
             expected_bound=expected_time,
             student_stated=student_time,
             complexity_type="time"
         )
 
-        # Evaluate space complexity (optional)
+        # ---------------------------------------------------------
+        # Evaluate space complexity
+        # ---------------------------------------------------------
         space_result = None
-        if expected_space:
-            space_result = _evaluate_complexity(
+        if params_model.require_space_complexity and expected_space:
+            space_result: SpaceComplexityResult = _evaluate_complexity(
                 detected=analysis.space_complexity,
                 expected_bound=expected_space,
                 student_stated=student_space,
                 complexity_type="space"
             )
 
-        # Calculate overall correctness and score
-        is_correct, score = _calculate_result(time_result, space_result, eval_options)
+        # ---------------------------------------------------------
+        # Run execution test cases
+        # ---------------------------------------------------------
+        test_case_results: List[TestCaseResult] = []
 
+        if answer_model.test_cases:
+            runner = CodeRunner(None, Interpreter())
+            code_correctness_result = runner.run_with_parse_result(
+                parse_result,
+                answer_model.test_cases
+            )
+            test_case_results = code_correctness_result.execution_results
+
+        # ---------------------------------------------------------
+        # Calculate overall correctness and score
+        # ---------------------------------------------------------
+        is_correct = _calculate_result(
+            time_result=time_result,
+            space_result=space_result,
+            test_case_results=test_case_results,
+            # eval_options=params_model,
+        )
+
+        # ---------------------------------------------------------
         # Generate feedback
+        # ---------------------------------------------------------
         feedback = _generate_feedback(
             time_result=time_result,
             space_result=space_result,
+            test_case_results=test_case_results,
             analysis=analysis,
             is_correct=is_correct,
-            eval_options=eval_options
+            eval_options=params_model,
         )
 
+        # ---------------------------------------------------------
         # Build result
+        # ---------------------------------------------------------
         result = Result(is_correct=is_correct)
+        # result.score = score
         result.add_feedback("complexity", feedback)
 
         return result
@@ -113,232 +206,163 @@ def evaluation_function(
         return result
 
 
-def _parse_response(response: Any) -> Tuple[str, Optional[str], Optional[str]]:
-    """Parse the student's response to extract pseudocode and stated complexities."""
-    if isinstance(response, str):
-        return response, None, None
-
-    if isinstance(response, dict):
-        pseudocode = response.get('pseudocode', response.get('code', ''))
-        time_complexity = response.get('time_complexity')
-        space_complexity = response.get('space_complexity')
-        return pseudocode, time_complexity, space_complexity
-
-    return '', None, None
-
-
-def _parse_answer(answer: Any, params: Params) -> Tuple[ComplexityClass, Optional[ComplexityClass], Dict]:
-    """Parse the expected answer and evaluation options."""
-    eval_options = {}
-
-    # Handle params
-    if hasattr(params, '__iter__'):
-        for key in params:
-            eval_options[key] = params[key]
-    elif hasattr(params, 'to_dict'):
-        eval_options = params.to_dict()
-
-    # Parse answer
-    if isinstance(answer, str):
-        expected_time = ComplexityClass.from_string(answer)
-        expected_space = None
-    elif isinstance(answer, dict):
-        expected_time = ComplexityClass.from_string(
-            answer.get('expected_time_complexity', answer.get('time_complexity', 'O(n)'))
-        )
-        expected_space_str = answer.get('expected_space_complexity', answer.get('space_complexity'))
-        expected_space = ComplexityClass.from_string(expected_space_str) if expected_space_str else None
-
-        # Merge answer options into eval_options
-        for key in ['show_detailed_feedback', 'strict_parsing', 'partial_credit']:
-            if key in answer:
-                eval_options[key] = answer[key]
-    else:
-        expected_time = ComplexityClass.LINEAR
-        expected_space = None
-
-    return expected_time, expected_space, eval_options
+from typing import Optional, Union
 
 
 def _evaluate_complexity(
     detected: ComplexityClass,
     expected_bound: ComplexityClass,
     student_stated: Optional[str],
-    complexity_type: str
-) -> Dict:
+    complexity_type: str,
+) -> Union[TimeComplexityResult, SpaceComplexityResult]:
     """
     Evaluate if detected complexity meets the expected bound.
-
-    Returns dict with:
-        - is_correct: True if detected <= expected_bound
-        - detected: The detected complexity
-        - expected: The expected bound
-        - comparison: -1 (better), 0 (equal), 1 (worse)
-        - student_stated_correct: If student's stated answer matches detected
+    Returns a TimeComplexityResult or SpaceComplexityResult
+    matching the output schema.
     """
-    # Compare complexities: correct if detected <= expected
+
+    # ---------------------------------------------------------
+    # Compare detected vs expected
+    # ---------------------------------------------------------
     comparison = ComplexityClass.compare(detected, expected_bound)
-    is_correct = comparison <= 0  # detected is same or better than bound
+    is_correct = comparison <= 0  # detected is same or better
 
-    # Check if student's stated complexity matches detected
-    student_stated_correct = None
+    # ---------------------------------------------------------
+    # Normalize student answer if provided
+    # ---------------------------------------------------------
+    student_normalized = None
     if student_stated:
-        stated_class = ComplexityClass.from_string(student_stated)
-        student_stated_correct = stated_class == detected
+        try:
+            student_normalized = ComplexityClass.from_string(student_stated)
+        except Exception:
+            student_normalized = None
 
-    return {
-        'is_correct': is_correct,
-        'detected': detected,
-        'expected': expected_bound,
-        'comparison': comparison,
-        'student_stated': student_stated,
-        'student_stated_correct': student_stated_correct,
-        'type': complexity_type
-    }
-
-
-def _calculate_result(
-    time_result: Dict,
-    space_result: Optional[Dict],
-    eval_options: Dict
-) -> Tuple[bool, float]:
-    """Calculate overall correctness and score."""
-    time_weight = eval_options.get('time_weight', 0.7)
-    space_weight = eval_options.get('space_weight', 0.3)
-    partial_credit = eval_options.get('partial_credit', True)
-
-    # If no space requirement, only consider time
-    if space_result is None:
-        is_correct = time_result['is_correct']
-        if partial_credit and not is_correct:
-            # Give partial credit based on how close they are
-            score = _partial_score(time_result['detected'], time_result['expected'])
-        else:
-            score = 1.0 if is_correct else 0.0
-        return is_correct, score
-
-    # Both time and space required
-    is_correct = time_result['is_correct'] and space_result['is_correct']
-
-    if partial_credit:
-        time_score = 1.0 if time_result['is_correct'] else _partial_score(
-            time_result['detected'], time_result['expected']
+    # ---------------------------------------------------------
+    # Build feedback message
+    # ---------------------------------------------------------
+    if is_correct:
+        feedback = (
+            f"Correct! Detected complexity {detected.value} "
+            f"meets the required bound {expected_bound.value}."
         )
-        space_score = 1.0 if space_result['is_correct'] else _partial_score(
-            space_result['detected'], space_result['expected']
-        )
-        score = time_weight * time_score + space_weight * space_score
     else:
-        score = 1.0 if is_correct else 0.0
+        feedback = (
+            f"Detected complexity is {detected.value}, "
+            f"which exceeds the required bound {expected_bound.value}."
+        )
 
-    return is_correct, score
+    # ---------------------------------------------------------
+    # Return correct schema object
+    # ---------------------------------------------------------
+    if complexity_type == "time":
+        return TimeComplexityResult(
+            is_correct=is_correct,
+            student_answer=student_stated,
+            expected_answer=expected_bound.value,
+            detected_complexity=detected.value,
+            student_normalized=student_normalized,
+            expected_normalized=expected_bound,
+            analysis=None,
+            feedback=feedback,
+        )
 
+    else:
+        return SpaceComplexityResult(
+            is_correct=is_correct,
+            student_answer=student_stated,
+            expected_answer=expected_bound.value,
+            detected_complexity=detected.value,
+            student_normalized=student_normalized,
+            expected_normalized=expected_bound,
+            analysis=None,
+            feedback=feedback,
+        )
 
-def _partial_score(detected: ComplexityClass, expected: ComplexityClass) -> float:
-    """Calculate partial credit score based on complexity difference."""
-    order = ComplexityClass.get_order()
+# as previously discussed, we shouldnt be returning a score
+def _calculate_result(
+    time_result: Optional[TimeComplexityResult],
+    space_result: Optional[SpaceComplexityResult],
+    test_case_results: List[TestCaseResult],
+) -> bool: #Tuple[bool, float]:
+    """Calculate overall correctness and score."""
 
-    try:
-        detected_idx = order.index(detected)
-        expected_idx = order.index(expected)
-    except ValueError:
-        return 0.0
+    is_correct = True
+    if test_case_results:
+        is_correct = all(tc.passed for tc in test_case_results)
+    if space_result is not None:
+        is_correct = space_result.is_correct and is_correct
+    if time_result is not None:
+        is_correct = time_result.is_correct and is_correct
 
-    if detected_idx <= expected_idx:
-        return 1.0  # Met or exceeded requirement
-
-    # Calculate partial credit: decreasing score for each level above expected
-    diff = detected_idx - expected_idx
-    # Score decreases by 0.2 for each complexity level above expected
-    # Max partial credit is 0.5 for being one level above
-    return max(0.0, 0.5 - (diff - 1) * 0.15)
+    return is_correct#, score
 
 
 def _generate_feedback(
-    time_result: Dict,
-    space_result: Optional[Dict],
+    time_result: Optional[TimeComplexityResult],
+    space_result: Optional[SpaceComplexityResult],
+    test_case_results: List[TestCaseResult],
     analysis: AnalysisResult,
     is_correct: bool,
-    eval_options: Dict
+    eval_options: EvaluationParams,
 ) -> str:
     """Generate comprehensive feedback for the student using FeedbackGenerator."""
-    # Use FeedbackGenerator for the core analysis feedback
     feedback_generator = FeedbackGenerator()
 
-    # Determine feedback level based on options
-    show_detailed = eval_options.get('show_detailed_feedback', True)
+    show_detailed = eval_options.show_detailed_feedback
     level = FeedbackLevel.DETAILED if show_detailed and not is_correct else FeedbackLevel.STANDARD
 
-    # Generate detailed feedback from analysis
     detailed_feedback = feedback_generator.generate(analysis, level)
 
-    # Build the final feedback string
     lines = []
 
-    # Overall result header
     if is_correct:
         lines.append("✓ Correct! Your algorithm meets the complexity requirements.")
     else:
         lines.append("✗ Your algorithm does not meet the complexity requirements.")
     lines.append("")
+    if time_result:
+        lines.append("Time Complexity:")
+        lines.append(f"  • Required: {time_result.expected_answer} or better")
+        lines.append(f"  • Detected: {time_result.detected_complexity}")
 
-    # Time complexity feedback
-    time_correct = time_result['is_correct']
-    lines.append("Time Complexity:")
-    lines.append(f"  • Required: {time_result['expected'].value} or better")
-    lines.append(f"  • Detected: {time_result['detected'].value}")
-
-    if time_correct:
-        if time_result['comparison'] < 0:
-            lines.append("  ✓ Excellent! Your algorithm is more efficient than required.")
-        else:
+        if time_result.is_correct:
             lines.append("  ✓ Your algorithm meets the time complexity requirement.")
-    else:
-        lines.append("  ✗ Your algorithm exceeds the allowed time complexity.")
-        lines.append(f"    Try to optimize your algorithm to achieve {time_result['expected'].value}.")
-
-    # Student's stated complexity feedback
-    if time_result.get('student_stated'):
-        if time_result.get('student_stated_correct'):
-            lines.append(f"  ✓ Your stated complexity ({time_result['student_stated']}) matches the detected complexity.")
         else:
-            lines.append(f"  ⚠ Your stated complexity ({time_result['student_stated']}) differs from detected ({time_result['detected'].value}).")
+            lines.append("  ✗ Your algorithm exceeds the allowed time complexity.")
 
-    lines.append("")
-
-    # Space complexity feedback (if applicable)
     if space_result:
-        space_correct = space_result['is_correct']
+        lines.append("")
         lines.append("Space Complexity:")
-        lines.append(f"  • Required: {space_result['expected'].value} or better")
-        lines.append(f"  • Detected: {space_result['detected'].value}")
+        lines.append(f"  • Required: {space_result.expected_answer} or better")
+        lines.append(f"  • Detected: {space_result.detected_complexity}")
 
-        if space_correct:
+        if space_result.is_correct:
             lines.append("  ✓ Your algorithm meets the space complexity requirement.")
         else:
             lines.append("  ✗ Your algorithm exceeds the allowed space complexity.")
-        lines.append("")
 
-    # Add detailed analysis from FeedbackGenerator (if enabled and incorrect)
+    if test_case_results:
+        lines.append("")
+        lines.append("Execution Test Cases:")
+        for idx, tc in enumerate(test_case_results, 1):
+            status = "✓ Passed" if tc.passed else "✗ Failed"
+            lines.append(f"  Test Case {idx}: {status}")
+            if not tc.passed and tc.error_message:
+                lines.append(f"    Error: {tc.error_message}")
+
     if show_detailed and not is_correct:
+        lines.append("")
         lines.append("-" * 50)
 
-        # Add sections from FeedbackGenerator
         for section in detailed_feedback.sections:
             lines.append(f"[{section.importance.upper()}] {section.title}")
             lines.append(section.content)
             lines.append("")
 
-        # Add suggestions from FeedbackGenerator
-        if detailed_feedback.suggestions:
-            lines.append("Suggestions:")
-            for suggestion in detailed_feedback.suggestions:
-                lines.append(f"  • {suggestion}")
-
     return "\n".join(lines)
 
 
-def _format_parse_error(parse_result) -> str:
+def _format_parse_error(parse_result: ParseResult) -> str:
     """Format parsing errors for feedback."""
     lines = ["Failed to parse the pseudocode."]
 
@@ -354,5 +378,3 @@ def _format_parse_error(parse_result) -> str:
 
     lines.append("\nPlease check your pseudocode syntax and try again.")
     return "\n".join(lines)
-
-
