@@ -68,59 +68,17 @@ class EvaluationParams(BaseModel):
     Configuration parameters for the evaluation.
     """
 
-    analyze_pseudocode: bool = True
     require_time_complexity: bool = True
     require_space_complexity: bool = True
 
-    # never used
-    partial_credit: bool = True
-    time_weight: float = Field(default=0.5, ge=0.0, le=1.0)
-    space_weight: float = Field(default=0.5, ge=0.0, le=1.0)
-
-    # never used
-    complexity_equivalence: bool = True
-    
-    # never used
-    case_sensitive: bool = False
-    strict_notation: bool = False
-
     show_detailed_feedback: bool = True
-    # never used
-    show_correct_answer: bool = True
-    # never used
-    show_detected_complexity: bool = True
-    # never used
-    show_ast: bool = False
-
-    # never used
-    pseudocode_style: str = Field(default="auto")
-
-    strict_parsing: bool = False
-
-    # never used
-    max_nesting_depth: int = Field(default=10, ge=1, le=50)
-    timeout_seconds: float = Field(default=5.0, ge=0.1, le=60.0)
 
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "analyze_pseudocode": True,
                 "require_time_complexity": True,
                 "require_space_complexity": True,
-                "partial_credit": True,
-                "time_weight": 0.5,
-                "space_weight": 0.5,
-                "complexity_equivalence": True,
-                "case_sensitive": False,
-                "strict_notation": False,
-                "show_detailed_feedback": True,
-                "show_correct_answer": True,
-                "show_detected_complexity": True,
-                "show_ast": False,
-                "pseudocode_style": "auto",
-                "strict_parsing": False,
-                "max_nesting_depth": 10,
-                "timeout_seconds": 5.0
+                "show_detailed_feedback": True
             }
         }
     )
@@ -140,16 +98,11 @@ class ExpectedAnswer(BaseModel):
         description="Expected space complexity in Big-O notation"
     )
 
-    acceptable_time_alternatives: List[str] = Field(default_factory=list)
-    acceptable_space_alternatives: List[str] = Field(default_factory=list)
+    # algorithm_description: Optional[str] = None
+    # algorithm_type: Optional[str] = None
 
-    algorithm_description: Optional[str] = None
-    algorithm_type: Optional[str] = None
-
-    expected_constructs: List[str] = Field(default_factory=list)
-
-    time_complexity_weight: float = Field(default=0.5, ge=0.0, le=1.0)
-    space_complexity_weight: float = Field(default=0.5, ge=0.0, le=1.0)
+    # maybe a TODO? can check for the presence of constructs
+    # expected_constructs: List[str] = Field(default_factory=list)
 
     test_cases: List[ExecutionTestCase] = Field(
         default_factory=list,
@@ -158,24 +111,29 @@ class ExpectedAnswer(BaseModel):
 
     eval_options: Optional[EvaluationParams] = None
 
-    def get_all_acceptable_time(self) -> List[str]:
-        return [self.expected_time_complexity] + self.acceptable_time_alternatives
+    # def get_all_acceptable_time(self) -> List[str]:
+    #     return [self.expected_time_complexity] + self.acceptable_time_alternatives
 
-    def get_all_acceptable_space(self) -> List[str]:
-        return [self.expected_space_complexity] + self.acceptable_space_alternatives
+    # def get_all_acceptable_space(self) -> List[str]:
+    #     return [self.expected_space_complexity] + self.acceptable_space_alternatives
 
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "expected_time_complexity": "O(n^2)",
                 "expected_space_complexity": "O(1)",
-                "acceptable_time_alternatives": ["O(n*n)", "O(n²)"],
-                "acceptable_space_alternatives": [],
-                "algorithm_description": "Matrix traversal with nested loops",
-                "algorithm_type": "iteration",
-                "expected_constructs": ["nested_loop"],
-                "time_complexity_weight": 0.6,
-                "space_complexity_weight": 0.4
+                "eval_options": {
+                    "require_time_complexity": True,
+                    "require_space_complexity": True,
+                    "show_detailed_feedback": True
+                }
+                # "acceptable_time_alternatives": ["O(n*n)", "O(n²)"],
+                # "acceptable_space_alternatives": [],
+                # "algorithm_description": "Matrix traversal with nested loops",
+                # "algorithm_type": "iteration",
+                # "expected_constructs": ["nested_loop"],
+                # "time_complexity_weight": 0.6,
+                # "space_complexity_weight": 0.4
             }
         }
     )

@@ -123,7 +123,7 @@ def evaluation_function(
         parser = PseudocodeParser()
         parse_result = parser.parse(pseudocode)
 
-        if not parse_result.success and params_model.strict_parsing:
+        if not parse_result.success:# and params_model.strict_parsing:
             result = Result(is_correct=False)
             result.add_feedback("error", _format_parse_error(parse_result))
             return result
