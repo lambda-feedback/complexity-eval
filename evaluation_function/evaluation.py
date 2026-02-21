@@ -398,29 +398,30 @@ def _generate_feedback(
 
     overall_message = "✓ Correct! Your algorithm meets the complexity requirements." if is_correct else "✗ Your algorithm does not meet the complexity requirements."
 
-    # Time complexity section
-    time_feedback = None
-    if time_result:
-        time_feedback = {
-            "required": time_result.expected_answer,
-            "detected": time_result.detected_complexity,
-            "is_correct": time_result.is_correct,
-            "message": "✓ Your algorithm meets the time complexity requirement."
-            if time_result.is_correct
-            else "✗ Your algorithm exceeds the allowed time complexity."
-        }
+    # # Time complexity section
+    # time_feedback = None
+    # if time_result:
+    #     time_feedback = TimeComplexityResult(
+    #         student_answer=
+    #         required=time_result.expected_answer,
+    #         detected=time_result.detected_complexity,
+    #         is_correct=time_result.is_correct,
+    #         message="✓ Your algorithm meets the time complexity requirement."
+    #             if time_result.is_correct
+    #             else "✗ Your algorithm exceeds the allowed time complexity."
+    #     )
 
-    # Space complexity section
-    space_feedback = None
-    if space_result:
-        space_feedback = {
-            "required": space_result.expected_answer,
-            "detected": space_result.detected_complexity,
-            "is_correct": space_result.is_correct,
-            "message": "✓ Your algorithm meets the space complexity requirement."
-            if space_result.is_correct
-            else "✗ Your algorithm exceeds the allowed space complexity."
-        }
+    # # Space complexity section
+    # space_feedback = None
+    # if space_result:
+    #     space_feedback = SpaceComplexityResult(
+    #         required=space_result.expected_answer,
+    #         detected=space_result.detected_complexity,
+    #         is_correct=space_result.is_correct,
+    #         message="✓ Your algorithm meets the space complexity requirement."
+    #             if space_result.is_correct
+    #             else "✗ Your algorithm exceeds the allowed space complexity."
+    #     )
 
     # Test cases section
     test_case_feedback = [
@@ -445,8 +446,8 @@ def _generate_feedback(
     return EvaluationResult(
         is_correct=is_correct,
         overall_message=overall_message,
-        time_complexity=time_feedback,
-        space_complexity=space_feedback,
+        time_complexity=time_result,
+        space_complexity=space_result,
         test_cases=test_case_feedback,
         detailed_sections=detailed_sections
     )

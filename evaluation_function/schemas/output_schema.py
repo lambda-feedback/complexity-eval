@@ -209,7 +209,7 @@ class SectionFeedback(BaseModel):
 class EvaluationResult(BaseModel):
     is_correct: bool
     overall_message: str
-    time_complexity: dict = Field(default_factory=dict)
-    space_complexity: dict = Field(default_factory=dict)
+    time_complexity: Optional[TimeComplexityResult] = Field(default=None)
+    space_complexity: Optional[SpaceComplexityResult] = Field(default=None)
     test_cases: List[TestCaseFeedback] = Field(default_factory=list)
     detailed_sections: List[SectionFeedback] = Field(default_factory=list)
