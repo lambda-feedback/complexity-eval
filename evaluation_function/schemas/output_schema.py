@@ -194,11 +194,6 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 
 
-class TestCaseFeedback(BaseModel):
-    index: int
-    passed: bool
-    error_message: str = Field(default="")
-
 
 class SectionFeedback(BaseModel):
     importance: str
@@ -211,5 +206,5 @@ class EvaluationResult(BaseModel):
     overall_message: str
     time_complexity: Optional[TimeComplexityResult] = Field(default=None)
     space_complexity: Optional[SpaceComplexityResult] = Field(default=None)
-    test_cases: List[TestCaseFeedback] = Field(default_factory=list)
+    test_cases: List[TestCaseResult] = Field(default_factory=list)
     detailed_sections: List[SectionFeedback] = Field(default_factory=list)

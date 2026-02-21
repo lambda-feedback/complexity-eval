@@ -19,7 +19,7 @@ from .schemas.output_schema import (
     ParseResult,
     SectionFeedback,
     SpaceComplexityResult,
-    TestCaseFeedback,
+    # TestCaseFeedback,
     TestCaseResult,
     TimeComplexityResult,
 )
@@ -424,14 +424,14 @@ def _generate_feedback(
     #     )
 
     # Test cases section
-    test_case_feedback = [
-        TestCaseFeedback(
-            index=i + 1,
-            passed=tc.passed,
-            error_message=tc.error_message if tc.error_message else ""
-        )
-        for i, tc in enumerate(test_case_results)
-    ] if test_case_results else []
+    # test_case_feedback = [
+    #     TestCaseFeedback(
+    #         index=i + 1,
+    #         passed=tc.passed,
+    #         error_message=tc.error_message if tc.error_message else ""
+    #     )
+    #     for i, tc in enumerate(test_case_results)
+    # ] if test_case_results else []
 
     # Detailed sections
     detailed_sections = [
@@ -448,6 +448,6 @@ def _generate_feedback(
         overall_message=overall_message,
         time_complexity=time_result,
         space_complexity=space_result,
-        test_cases=test_case_feedback,
+        test_cases=test_case_results,
         detailed_sections=detailed_sections
     )
