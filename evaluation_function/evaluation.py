@@ -10,12 +10,16 @@ This module implements the main evaluation pipeline that:
 The answer specifies a complexity upper bound that the student's code must meet.
 """
 
+import json
 from typing import Any, Dict, Optional, Tuple, List, Union
 from lf_toolkit.evaluation import Result
 
 from .schemas.output_schema import (
+    EvaluationResult,
     ParseResult,
+    SectionFeedback,
     SpaceComplexityResult,
+    TestCaseFeedback,
     TestCaseResult,
     TimeComplexityResult,
 )
@@ -191,12 +195,9 @@ def evaluation_function(
             eval_options=params_model,
         )
 
-        # ---------------------------------------------------------
-        # Build result
-        # ---------------------------------------------------------
         result = Result(is_correct=is_correct)
         # result.score = score
-        result.add_feedback("complexity", feedback)
+        result.add_feedback("complexity", feedback.model_dump_json())
 
         return result
 
@@ -297,69 +298,69 @@ def _calculate_result(
     return is_correct#, score
 
 
-def _generate_feedback(
-    time_result: Optional[TimeComplexityResult],
-    space_result: Optional[SpaceComplexityResult],
-    test_case_results: List[TestCaseResult],
-    analysis: AnalysisResult,
-    is_correct: bool,
-    eval_options: EvaluationParams,
-) -> str:
-    """Generate comprehensive feedback for the student using FeedbackGenerator."""
-    feedback_generator = FeedbackGenerator()
+# def _generate_feedback(
+#     time_result: Optional[TimeComplexityResult],
+#     space_result: Optional[SpaceComplexityResult],
+#     test_case_results: List[TestCaseResult],
+#     analysis: AnalysisResult,
+#     is_correct: bool,
+#     eval_options: EvaluationParams,
+# ) -> str:
+#     """Generate comprehensive feedback for the student using FeedbackGenerator."""
+#     feedback_generator = FeedbackGenerator()
 
-    show_detailed = eval_options.show_detailed_feedback
-    level = FeedbackLevel.DETAILED if show_detailed and not is_correct else FeedbackLevel.STANDARD
+#     show_detailed = eval_options.show_detailed_feedback
+#     level = FeedbackLevel.DETAILED if show_detailed and not is_correct else FeedbackLevel.STANDARD
 
-    detailed_feedback = feedback_generator.generate(analysis, level)
+#     detailed_feedback = feedback_generator.generate(analysis, level)
 
-    lines = []
+#     lines = []
 
-    if is_correct:
-        lines.append("✓ Correct! Your algorithm meets the complexity requirements.")
-    else:
-        lines.append("✗ Your algorithm does not meet the complexity requirements.")
-    lines.append("")
-    if time_result:
-        lines.append("Time Complexity:")
-        lines.append(f"  • Required: {time_result.expected_answer} or better")
-        lines.append(f"  • Detected: {time_result.detected_complexity}")
+#     if is_correct:
+#         lines.append("✓ Correct! Your algorithm meets the complexity requirements.")
+#     else:
+#         lines.append("✗ Your algorithm does not meet the complexity requirements.")
+#     lines.append("")
+#     if time_result:
+#         lines.append("Time Complexity:")
+#         lines.append(f"  • Required: {time_result.expected_answer} or better")
+#         lines.append(f"  • Detected: {time_result.detected_complexity}")
 
-        if time_result.is_correct:
-            lines.append("  ✓ Your algorithm meets the time complexity requirement.")
-        else:
-            lines.append("  ✗ Your algorithm exceeds the allowed time complexity.")
+#         if time_result.is_correct:
+#             lines.append("  ✓ Your algorithm meets the time complexity requirement.")
+#         else:
+#             lines.append("  ✗ Your algorithm exceeds the allowed time complexity.")
 
-    if space_result:
-        lines.append("")
-        lines.append("Space Complexity:")
-        lines.append(f"  • Required: {space_result.expected_answer} or better")
-        lines.append(f"  • Detected: {space_result.detected_complexity}")
+#     if space_result:
+#         lines.append("")
+#         lines.append("Space Complexity:")
+#         lines.append(f"  • Required: {space_result.expected_answer} or better")
+#         lines.append(f"  • Detected: {space_result.detected_complexity}")
 
-        if space_result.is_correct:
-            lines.append("  ✓ Your algorithm meets the space complexity requirement.")
-        else:
-            lines.append("  ✗ Your algorithm exceeds the allowed space complexity.")
+#         if space_result.is_correct:
+#             lines.append("  ✓ Your algorithm meets the space complexity requirement.")
+#         else:
+#             lines.append("  ✗ Your algorithm exceeds the allowed space complexity.")
 
-    if test_case_results:
-        lines.append("")
-        lines.append("Execution Test Cases:")
-        for idx, tc in enumerate(test_case_results, 1):
-            status = "✓ Passed" if tc.passed else "✗ Failed"
-            lines.append(f"  Test Case {idx}: {status}")
-            if not tc.passed and tc.error_message:
-                lines.append(f"    Error: {tc.error_message}")
+#     if test_case_results:
+#         lines.append("")
+#         lines.append("Execution Test Cases:")
+#         for idx, tc in enumerate(test_case_results, 1):
+#             status = "✓ Passed" if tc.passed else "✗ Failed"
+#             lines.append(f"  Test Case {idx}: {status}")
+#             if not tc.passed and tc.error_message:
+#                 lines.append(f"    Error: {tc.error_message}")
 
-    if show_detailed and not is_correct:
-        lines.append("")
-        lines.append("-" * 50)
+#     if show_detailed and not is_correct:
+#         lines.append("")
+#         lines.append("-" * 50)
 
-        for section in detailed_feedback.sections:
-            lines.append(f"[{section.importance.upper()}] {section.title}")
-            lines.append(section.content)
-            lines.append("")
+#         for section in detailed_feedback.sections:
+#             lines.append(f"[{section.importance.upper()}] {section.title}")
+#             lines.append(section.content)
+#             lines.append("")
 
-    return "\n".join(lines)
+#     return "\n".join(lines)
 
 
 def _format_parse_error(parse_result: ParseResult) -> str:
@@ -378,3 +379,74 @@ def _format_parse_error(parse_result: ParseResult) -> str:
 
     lines.append("\nPlease check your pseudocode syntax and try again.")
     return "\n".join(lines)
+
+
+def _generate_feedback(
+    time_result: Optional[TimeComplexityResult],
+    space_result: Optional[SpaceComplexityResult],
+    test_case_results: List[TestCaseResult],
+    analysis: AnalysisResult,
+    is_correct: bool,
+    eval_options: EvaluationParams,
+) -> EvaluationResult:
+    """Generate structured feedback for the student using FeedbackGenerator."""
+
+    feedback_generator = FeedbackGenerator()
+    show_detailed = eval_options.show_detailed_feedback
+    level = FeedbackLevel.DETAILED if show_detailed and not is_correct else FeedbackLevel.STANDARD
+    detailed_feedback = feedback_generator.generate(analysis, level)
+
+    overall_message = "✓ Correct! Your algorithm meets the complexity requirements." if is_correct else "✗ Your algorithm does not meet the complexity requirements."
+
+    # Time complexity section
+    time_feedback = None
+    if time_result:
+        time_feedback = {
+            "required": time_result.expected_answer,
+            "detected": time_result.detected_complexity,
+            "is_correct": time_result.is_correct,
+            "message": "✓ Your algorithm meets the time complexity requirement."
+            if time_result.is_correct
+            else "✗ Your algorithm exceeds the allowed time complexity."
+        }
+
+    # Space complexity section
+    space_feedback = None
+    if space_result:
+        space_feedback = {
+            "required": space_result.expected_answer,
+            "detected": space_result.detected_complexity,
+            "is_correct": space_result.is_correct,
+            "message": "✓ Your algorithm meets the space complexity requirement."
+            if space_result.is_correct
+            else "✗ Your algorithm exceeds the allowed space complexity."
+        }
+
+    # Test cases section
+    test_case_feedback = [
+        TestCaseFeedback(
+            index=i + 1,
+            passed=tc.passed,
+            error_message=tc.error_message if tc.error_message else ""
+        )
+        for i, tc in enumerate(test_case_results)
+    ] if test_case_results else []
+
+    # Detailed sections
+    detailed_sections = [
+        SectionFeedback(
+            importance=section.importance,
+            title=section.title,
+            content=section.content
+        )
+        for section in detailed_feedback.sections
+    ] if show_detailed and not is_correct else []
+
+    return EvaluationResult(
+        is_correct=is_correct,
+        overall_message=overall_message,
+        time_complexity=time_feedback,
+        space_complexity=space_feedback,
+        test_cases=test_case_feedback,
+        detailed_sections=detailed_sections
+    )

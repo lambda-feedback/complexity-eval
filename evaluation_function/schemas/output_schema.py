@@ -190,48 +190,26 @@ class ComplexityAnalysis(BaseModel):
     confidence: float = Field(default=1.0, ge=0.0, le=1.0)
     parse_result: Optional[ParseResult] = None
 
+from pydantic import BaseModel, Field
+from typing import List, Optional
+
+
+class TestCaseFeedback(BaseModel):
+    index: int
+    passed: bool
+    error_message: str = Field(default="")
+
+
+class SectionFeedback(BaseModel):
+    importance: str
+    title: str
+    content: str
+
 
 class EvaluationResult(BaseModel):
     is_correct: bool
-    time_complexity_result: Optional[TimeComplexityResult] = None
-    space_complexity_result: Optional[SpaceComplexityResult] = None
-    score: float = Field(default=0.0, ge=0.0, le=1.0)
-    analysis: Optional[ComplexityAnalysis] = None
-    ast: Optional[ProgramNode] = None
-    feedback: str = ""
-    feedback_items: List[FeedbackItem] = Field(default_factory=list)
-    test_case_results: List[TestCaseResult] = Field(default_factory=list)
-    warnings: List[str] = Field(default_factory=list)
-    errors: List[str] = Field(default_factory=list)
-    metadata: Dict[str, Any] = Field(default_factory=dict)
-
-    def to_lambda_feedback_response(self) -> Dict[str, Any]:
-        response = {"is_correct": self.is_correct}
-
-        if self.feedback:
-            response["feedback"] = self.feedback
-
-        if self.time_complexity_result:
-            response["time_complexity"] = {
-                "is_correct": self.time_complexity_result.is_correct,
-                "student_answer": self.time_complexity_result.student_answer,
-                "expected_answer": self.time_complexity_result.expected_answer,
-                "feedback": self.time_complexity_result.feedback,
-            }
-
-        if self.space_complexity_result:
-            response["space_complexity"] = {
-                "is_correct": self.space_complexity_result.is_correct,
-                "student_answer": self.space_complexity_result.student_answer,
-                "expected_answer": self.space_complexity_result.expected_answer,
-                "feedback": self.space_complexity_result.feedback,
-            }
-
-        if self.analysis:
-            response["analysis"] = {
-                "detected_time_complexity": self.analysis.time_complexity.expression,
-                "detected_space_complexity": self.analysis.space_complexity.expression,
-                "constructs": [c.model_dump() for c in self.analysis.constructs],
-            }
-
-        return response
+    overall_message: str
+    time_complexity: dict = Field(default_factory=dict)
+    space_complexity: dict = Field(default_factory=dict)
+    test_cases: List[TestCaseFeedback] = Field(default_factory=list)
+    detailed_sections: List[SectionFeedback] = Field(default_factory=list)
